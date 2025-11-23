@@ -23,8 +23,6 @@ async def _test_connection(hass: HomeAssistant, host: str) -> bool:
 
 
 class RensonSenseConfigFlow(config_entries.ConfigFlow):
-    """Handle a config flow for Renson Sense."""
-
     VERSION = 1
     DOMAIN = DOMAIN
 
