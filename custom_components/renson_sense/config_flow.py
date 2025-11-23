@@ -28,7 +28,8 @@ class RensonSenseConfigFlow(config_entries.ConfigFlow):
     VERSION = 1
     DOMAIN = DOMAIN
 
-    async def async_step_user(self, user_input=None) -> FlowResult:
+    async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
+        """Handle the initial step."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -38,7 +39,7 @@ class RensonSenseConfigFlow(config_entries.ConfigFlow):
             if not await _test_connection(self.hass, host):
                 errors["base"] = "cannot_connect"
             else:
-                # Allow multiple devices; we don't set unique_id to permit duplicates
+                # Allow multiple devices; no unique_id so duplicates are allowed.
                 return self.async_create_entry(
                     title=name,
                     data={

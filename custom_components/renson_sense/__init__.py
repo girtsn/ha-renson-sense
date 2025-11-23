@@ -15,7 +15,7 @@ from .const import DOMAIN, CONF_HOST, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
-# ✔ Required for HA tooling & VS Code, even if we don’t use forward_entry_setups
+# Required for HA tooling & VS Code, even if we don't use forward_entry_setups
 PLATFORMS: list[str] = ["sensor"]
 
 
@@ -25,16 +25,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     session = async_get_clientsession(hass)
 
-  async def async_update_data():
-    """Fetch data from the Renson Sense."""
-    url = f"http://{host}/v1/constellation/sensor"
-    try:
-        async with session.get(url, timeout=10) as resp:
-            if resp.status != 200:
-                raise UpdateFailed(f"HTTP {resp.status}")
-            return await resp.json()
-    except Exception as err:
-        raise UpdateFailed(f"Error fetching {url}: {err}")
+    async def async_update_data():
+        """Fetch data from the Renson Sense."""
+        url = f"http://{host}/v1/constellation/sensor"
+        try:
+            async with session.get(url, timeout=10) as resp:
+                if resp.status != 200:
+                    raise UpdateFailed(f"HTTP {resp.status}")
+                return await resp.json()
+        except Exception as err:
+            raise UpdateFailed(f"Error fetching {url}: {err}")
 
     coordinator = DataUpdateCoordinator(
         hass,
