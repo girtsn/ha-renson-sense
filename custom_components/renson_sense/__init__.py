@@ -47,20 +47,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    from . import sensor
-
-    hass.async_create_task(
-        sensor.async_setup_entry(
-            hass,
-            entry,
-            hass.helpers.entity_platform.async_add_entities,
-        )
-    )
+    # Use the standard Home Assistant pattern to load platforms
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Renson Sense config entry."""
-    hass.data[DOMAIN].pop(entry.entry_id, None)
-    return True
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    return unload_ok
