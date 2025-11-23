@@ -1,0 +1,8 @@
+{
+  "name": "Renson Sense",
+  "content_in_root": false,
+  "domains": ["renson_sense"],
+  "homeassistant": "2025.11.3",
+  "render_readme": true,
+  "category": "integration"
+}
