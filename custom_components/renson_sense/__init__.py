@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 import logging
 
@@ -15,7 +14,6 @@ from .const import DOMAIN, CONF_HOST, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
-# Required for HA tooling & VS Code, even if we don't use forward_entry_setups
 PLATFORMS: list[str] = ["sensor"]
 
 
@@ -49,10 +47,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Safe static import
     from . import sensor
 
-    # Start platform setup asynchronously without blocking the event loop
     hass.async_create_task(
         sensor.async_setup_entry(
             hass,
