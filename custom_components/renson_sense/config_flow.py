@@ -22,12 +22,12 @@ async def _test_connection(hass: HomeAssistant, host: str) -> bool:
         return False
 
 
-class RensonSenseConfigFlow(config_entries.ConfigFlow):
-    VERSION = 1
-    DOMAIN = DOMAIN
+class RensonSenseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Renson Sense."""
 
-    async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
-        """Handle the initial step."""
+    VERSION = 1
+
+    async def async_step_user(self, user_input=None) -> FlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -37,7 +37,7 @@ class RensonSenseConfigFlow(config_entries.ConfigFlow):
             if not await _test_connection(self.hass, host):
                 errors["base"] = "cannot_connect"
             else:
-                # Allow multiple devices; no unique_id so duplicates are allowed.
+                # Allow multiple devices; we don't set a unique_id to permit duplicates
                 return self.async_create_entry(
                     title=name,
                     data={

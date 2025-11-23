@@ -1,7 +1,7 @@
 {
   "domain": "renson_sense",
   "name": "Renson Sense",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "documentation": "https://github.com/girtsn/ha-renson-sense",
   "issue_tracker": "https://github.com/girtsn/ha-renson-sense/issues",
   "requirements": [],
