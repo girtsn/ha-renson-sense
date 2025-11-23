@@ -18,14 +18,16 @@ from homeassistant.helpers.update_coordinator import (
 from .const import DOMAIN, CONF_NAME
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RensonSensorDescription(SensorEntityDescription):
-    sensor_type: str              # e.g. "temp", "rh", "co2", "lux", "avoc", ...
-    param_path: List[str]         # path inside ["parameter"][...]["value"]
+    """Description of a Renson Sense sensor."""
+    sensor_type: str
+    param_path: List[str]
 
 
+# Core + optional sensor definitions
 SENSORS: list[RensonSensorDescription] = [
-    # Core types (your device)
+     # Core types (your device)
     RensonSensorDescription(
         key="temperature",
         name="Temperature",
@@ -75,7 +77,7 @@ SENSORS: list[RensonSensorDescription] = [
         param_path=["parameter", "rssi", "value"],
     ),
 
-    # Optional types some devices might have
+    # Optional sensors — created only if returned by device
     RensonSensorDescription(
         key="co2",
         name="CO2 concentration",
@@ -100,29 +102,30 @@ SENSORS: list[RensonSensorDescription] = [
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Renson Sense sensors from a config entry."""
+    """Set up Renson Sense sensor entities from a config entry."""
+
     coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     device_name: str = entry.data.get(CONF_NAME, "Renson Sense")
 
     data = coordinator.data or {}
     available_types = {node.get("type") for node in data.values()}
 
-    entities: list[RensonSenseEntity] = []
+    entities: list[RensonSenseEntity] = [
+        RensonSenseEntity(
+            coordinator=coordinator,
+            description=desc,
+            device_name=device_name,
+            entry_id=entry.entry_id,
+        )
+        for desc in SENSORS
+        if desc.sensor_type in available_types
+    ]
 
-    for desc in SENSORS:
-        if desc.sensor_type in available_types:
-            entities.append(
-                RensonSenseEntity(
-                    coordinator=coordinator,
-                    description=desc,
-                    device_name=device_name,
-                    entry_id=entry.entry_id,
-                )
-            )
-
-    add_entities(entities)
+    async_add_entities(entities)
 
 
 class RensonSenseEntity(CoordinatorEntity, SensorEntity):
@@ -138,9 +141,11 @@ class RensonSenseEntity(CoordinatorEntity, SensorEntity):
         entry_id: str,
     ) -> None:
         super().__init__(coordinator)
+
         self.entity_description = description
         self._attr_unique_id = f"{entry_id}_{description.key}"
         self._attr_name = f"{device_name} {description.name}"
+
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry_id)},
             "name": device_name,
@@ -150,21 +155,24 @@ class RensonSenseEntity(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> Any:
+        """Extract the sensor value from coordinator data."""
         data = self.coordinator.data or {}
-        target_type = self.entity_description.sensor_type
+        sensor_type = self.entity_description.sensor_type
 
+        # Find the matching JSON node by type
         node = None
         for item in data.values():
-            if item.get("type") == target_type:
+            if item.get("type") == sensor_type:
                 node = item
                 break
 
-        if node is None:
+        if not node:
             return None
 
         try:
-            for key in self.entity_description.param_path:
-                node = node[key]
+            # Follow the param path to extract the value
+            for step in self.entity_description.param_path:
+                node = node[step]
             return node
-        except (KeyError, TypeError):
+        except Exception:
             return None
