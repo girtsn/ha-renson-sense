@@ -26,6 +26,7 @@ class RensonSenseConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Renson Sense."""
 
     VERSION = 1
+    DOMAIN = DOMAIN
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         errors: dict[str, str] = {}
