@@ -39,6 +39,19 @@ async def async_setup_entry(
         },
         "async_start_boost",
     )
+    # The confirmation string is deliberately required on every invocation,
+    # including automations. Neither command runs during setup, polling or
+    # an ordinary fan turn-on.
+    platform.async_register_entity_service(
+        "calibrate",
+        {vol.Required("confirmation"): vol.In(["CALIBRATE"])},
+        "async_calibrate",
+    )
+    platform.async_register_entity_service(
+        "restart_device",
+        {vol.Required("confirmation"): vol.In(["RESTART"])},
+        "async_restart_device",
+    )
 
 
 class RensonBoost(CoordinatorEntity[RensonCoordinator], FanEntity):
@@ -104,6 +117,22 @@ class RensonBoost(CoordinatorEntity[RensonCoordinator], FanEntity):
             self._room, enable=False, level=0, timeout=0
         )
         await self.coordinator.async_request_refresh()
+
+    async def async_calibrate(self, confirmation: str) -> None:
+        """Request calibration of this device's exhaust pressure curve.
+
+        The returned HTTP response is not a verified calibration outcome.
+        Renson's app or the device LED should be used to confirm completion.
+        """
+        if confirmation != "CALIBRATE":
+            raise ValueError("Explicit CALIBRATE confirmation is required")
+        await self.coordinator.api.post_maintenance_command("calibrate")
+
+    async def async_restart_device(self, confirmation: str) -> None:
+        """Restart this specific Waves device (briefly interrupts telemetry)."""
+        if confirmation != "RESTART":
+            raise ValueError("Explicit RESTART confirmation is required")
+        await self.coordinator.api.post_maintenance_command("restart")
 
     async def async_set_percentage(self, percentage: int) -> None:
         if percentage <= 0:
