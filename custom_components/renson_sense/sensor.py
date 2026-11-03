@@ -1,178 +1,235 @@
+"""Environmental, ventilation and diagnostic sensors for Renson devices."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_NAME
+from . import RensonCoordinator
+from .const import CONF_NAME, DOMAIN
+from .helpers import estimated_voc, nested_value, numeric, typed_node, ventilation_percentage
 
 
 @dataclass(kw_only=True)
 class RensonSensorDescription(SensorEntityDescription):
-    """Description of a Renson Sense sensor."""
-    sensor_type: str
-    param_path: List[str]
+    """Description of a dynamic sensor or a single endpoint field."""
+
+    source: str = "sensor"
+    node_type: str | None = None
+    path: tuple[str, ...] = ()
+    conversion: str | None = None
+    numeric_value: bool = True
 
 
-# Core + optional sensor definitions
 SENSORS: list[RensonSensorDescription] = [
-     # Core types (your device)
+    # Keep existing unique IDs (entry ID + original key) for existing entities.
     RensonSensorDescription(
-        key="temperature",
-        name="Temperature",
-        native_unit_of_measurement="°C",
-        sensor_type="temp",
-        param_path=["parameter", "temperature", "value"],
+        key="temperature", name="Temperature", node_type="temp",
+        path=("parameter", "temperature", "value"),
+        native_unit_of_measurement="°C", device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     RensonSensorDescription(
-        key="humidity",
-        name="Humidity",
-        native_unit_of_measurement="%",
-        sensor_type="rh",
-        param_path=["parameter", "humidity", "value"],
+        key="humidity", name="Humidity", node_type="rh",
+        path=("parameter", "humidity", "value"),
+        native_unit_of_measurement="%", device_class=SensorDeviceClass.HUMIDITY,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     RensonSensorDescription(
-        key="absolute_humidity",
-        name="Absolute humidity",
-        native_unit_of_measurement="g/kg",
-        sensor_type="ah",
-        param_path=["parameter", "humidity", "value"],
+        key="voc", name="VOC raw", node_type="avoc",
+        path=("parameter", "raw", "value"),
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     RensonSensorDescription(
-        key="voc",
-        name="VOC",
-        native_unit_of_measurement="ppm",
-        sensor_type="avoc",
-        param_path=["parameter", "raw", "value"],
+        key="voc_estimated", name="VOC estimated (Renson app scale)",
+        node_type="avoc", path=("parameter", "raw", "value"),
+        conversion="estimated_voc", state_class=SensorStateClass.MEASUREMENT,
     ),
     RensonSensorDescription(
-        key="pressure",
-        name="Pressure",
-        native_unit_of_measurement="Pa",
-        sensor_type="press",
-        param_path=["parameter", "pressure", "value"],
+        key="pressure", name="Ventilation pressure", node_type="press",
+        path=("parameter", "pressure", "value"),
+        native_unit_of_measurement="Pa", device_class=SensorDeviceClass.PRESSURE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     RensonSensorDescription(
-        key="heap",
-        name="Heap average",
-        sensor_type="heap_info",
-        param_path=["parameter", "average_current_heap", "value"],
+        key="heap", name="Heap average", node_type="heap_info",
+        path=("parameter", "average_current_heap", "value"),
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     RensonSensorDescription(
-        key="rssi",
-        name="Wi-Fi RSSI",
-        native_unit_of_measurement="dBm",
-        sensor_type="rssi",
-        param_path=["parameter", "rssi", "value"],
-    ),
-
-    # Optional sensors — created only if returned by device
-    RensonSensorDescription(
-        key="co2",
-        name="CO2 concentration",
-        native_unit_of_measurement="ppm",
-        sensor_type="co2",
-        param_path=["parameter", "concentration", "value"],
+        key="rssi", name="Wi-Fi RSSI", node_type="rssi",
+        path=("parameter", "rssi", "value"), native_unit_of_measurement="dBm",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     RensonSensorDescription(
-        key="lux",
-        name="Light level",
-        native_unit_of_measurement="lx",
-        sensor_type="lux",
-        param_path=["parameter", "lux", "value"],
+        key="co2", name="CO2 concentration", node_type="co2",
+        path=("parameter", "concentration", "value"),
+        native_unit_of_measurement="ppm", device_class=SensorDeviceClass.CO2,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     RensonSensorDescription(
-        key="sound",
-        name="Sound level",
-        sensor_type="sound",
-        param_path=["parameter", "average_level", "value"],
+        key="lux", name="Light level", node_type="lux",
+        path=("parameter", "lux", "value"), native_unit_of_measurement="lx",
+        device_class=SensorDeviceClass.ILLUMINANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    RensonSensorDescription(
+        key="sound", name="Sound level", node_type="sound",
+        path=("parameter", "average_level", "value"),
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    RensonSensorDescription(
+        key="decision_trigger", name="Ventilation trigger", node_type="decision",
+        path=("parameter", "trigger", "value"), numeric_value=False,
+    ),
+    RensonSensorDescription(
+        key="airflow", name="Ventilation airflow", source="actuator",
+        node_type="ventilation fan", path=("parameter", "flow_rate", "value"),
+        native_unit_of_measurement="m³/h",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    RensonSensorDescription(
+        key="ventilation_level", name="Ventilation level", source="actuator",
+        node_type="ventilation fan", path=("parameter", "flow_rate", "value"),
+        conversion="ventilation_level", native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    RensonSensorDescription(
+        key="fan_rpm", name="Fan speed", source="actuator",
+        node_type="ventilation fan", path=("parameter", "rpm", "value"),
+        native_unit_of_measurement="rpm", state_class=SensorStateClass.MEASUREMENT,
+    ),
+    RensonSensorDescription(
+        key="fan_pwm", name="Motor PWM", source="actuator",
+        node_type="ventilation fan", path=("parameter", "pwm", "value"),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="motor_type", name="Motor model", source="actuator",
+        node_type="ventilation fan", path=("parameter", "motor_type", "value"),
+        numeric_value=False, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="nominal_airflow", name="Nominal airflow", source="decision_room",
+        path=("nominal",), native_unit_of_measurement="m³/h",
+        state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="minimum_airflow", name="Minimum airflow", source="decision_room",
+        path=("minimum",), native_unit_of_measurement="m³/h",
+        state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="boost_level", name="Boost target", source="decision_room",
+        path=("boost", "level"), native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="boost_remaining", name="Boost remaining", source="decision_room",
+        path=("boost", "remaining"), native_unit_of_measurement="s",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    RensonSensorDescription(
+        key="boost_timeout", name="Boost timeout", source="decision_room",
+        path=("boost", "timeout"), native_unit_of_measurement="s",
+        state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="silent_reduction", name="Silent mode reduction", source="decision_silent",
+        path=("reduction",), native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="breeze_temperature", name="Breeze temperature threshold", source="decision_breeze",
+        path=("temp_threshold",), native_unit_of_measurement="°C",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="uptime", name="Uptime", source="uptime", path=("uptime",),
+        native_unit_of_measurement="s",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="wifi_ssid", name="Wi-Fi SSID", source="wifi", path=("ssid",),
+        numeric_value=False, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="wifi_ip", name="Wi-Fi IP", source="wifi", path=("IP",),
+        numeric_value=False, entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
 
 
+def _has_value(data: dict[str, Any], desc: RensonSensorDescription) -> bool:
+    """Discover only metrics actually returned by this device."""
+    if desc.source in ("sensor", "actuator"):
+        node = typed_node(data.get(desc.source), desc.node_type or "")
+    else:
+        node = data.get(desc.source, {})
+    return nested_value(node, *desc.path) is not None
+
+
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up Renson Sense sensor entities from a config entry."""
-
-    coordinator: DataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    device_name: str = entry.data.get(CONF_NAME, "Renson Sense")
-
+    """Expose only sensors available on this particular device."""
+    coordinator: RensonCoordinator = hass.data[DOMAIN][entry.entry_id]
     data = coordinator.data or {}
-    available_types = {node.get("type") for node in data.values()}
-
-    entities: list[RensonSenseEntity] = [
-        RensonSenseEntity(
-            coordinator=coordinator,
-            description=desc,
-            device_name=device_name,
-            entry_id=entry.entry_id,
-        )
-        for desc in SENSORS
-        if desc.sensor_type in available_types
-    ]
-
-    async_add_entities(entities)
+    async_add_entities([
+        RensonSensor(coordinator, entry, description)
+        for description in SENSORS if _has_value(data, description)
+    ])
 
 
-class RensonSenseEntity(CoordinatorEntity, SensorEntity):
-    """Representation of a single Renson Sense metric."""
+class RensonSensor(CoordinatorEntity[RensonCoordinator], SensorEntity):
+    """One local Renson measurement or derived quantity."""
 
     entity_description: RensonSensorDescription
 
     def __init__(
-        self,
-        coordinator: DataUpdateCoordinator,
-        description: RensonSensorDescription,
-        device_name: str,
-        entry_id: str,
+        self, coordinator: RensonCoordinator, entry: ConfigEntry,
+        description: RensonSensorDescription
     ) -> None:
         super().__init__(coordinator)
-
         self.entity_description = description
-        self._attr_unique_id = f"{entry_id}_{description.key}"
-        self._attr_name = f"{device_name} {description.name}"
-
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_name = f"{entry.data.get(CONF_NAME, entry.title)} {description.name}"
+        global_info = coordinator.data.get("global", {})
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry_id)},
-            "name": device_name,
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
             "manufacturer": "Renson",
-            "model": "Sense",
+            "model": nested_value(global_info, "product_name", "value") or "Sense / Waves",
+            "sw_version": nested_value(global_info, "firmware_version", "value"),
         }
 
     @property
     def native_value(self) -> Any:
-        """Extract the sensor value from coordinator data."""
         data = self.coordinator.data or {}
-        sensor_type = self.entity_description.sensor_type
-
-        # Find the matching JSON node by type
-        node = None
-        for item in data.values():
-            if item.get("type") == sensor_type:
-                node = item
-                break
-
-        if not node:
-            return None
-
-        try:
-            # Follow the param path to extract the value
-            for step in self.entity_description.param_path:
-                node = node[step]
-            return node
-        except Exception:
-            return None
+        desc = self.entity_description
+        if desc.source in ("sensor", "actuator"):
+            node = typed_node(data.get(desc.source), desc.node_type or "")
+        else:
+            node = data.get(desc.source, {})
+        value = nested_value(node, *desc.path)
+        if desc.conversion == "estimated_voc":
+            return estimated_voc(value)
+        if desc.conversion == "ventilation_level":
+            return ventilation_percentage(value, nested_value(data, "decision_room", "nominal"))
+        return numeric(value) if desc.numeric_value else value

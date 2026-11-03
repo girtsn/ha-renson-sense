@@ -1,43 +1,102 @@
-# Renson Sense - Home Assistant custom integration
+# Renson Sense / Waves — Home Assistant custom integration
 
-This is a custom integration for Renson Sense devices using their local
-JSON API (`/v1/constellation/sensor`).
+Local API integration for Renson Sense and Waves devices. No Renson cloud account
+is needed. Supports multiple device IPs / config entries with distinct names.
 
-Features:
+## What's new in 0.2.0
 
-- Local polling, no cloud
-- Supports multiple devices (multiple IPs)
-- Friendly name per device
-- Automatically detects which sensor "types" are available and creates
-  entities accordingly (no dependency on index order)
-- Supports:
-  - Temperature (`temp`)
-  - Relative humidity (`rh`)
-  - Absolute humidity (`ah`)
-  - VOC (`avoc`)
-  - Pressure (`press`)
-  - Heap info (`heap_info`)
-  - Wi-Fi RSSI (`rssi`)
-  - Optionally: CO₂ (`co2`), Lux (`lux`), Sound (`sound`) if the device exposes them
+- **Recorder and long-term statistics:** temperature, relative humidity, raw
+  VOC, estimated VOC, live pressure, airflow, ventilation level, fan RPM and
+  other numeric readings declare Home Assistant's measurement state class.
+  This enables hourly long-term statistics *going forward*, provided Recorder
+  includes the entity. Old history is **not retroactively backfilled**.
+- **Waves fan telemetry:** measured airflow (m³/h), RPM and diagnostic PWM.
+  PWM is **not** electrical power in watts.
+- **Ventilation %:** airflow / configured nominal airflow × 100. Both nominal
+  and minimum airflow are automatically read from /v1/decision/room.
+- **Additional states:** boost active/remaining, static and dynamic humidity
+  and VOC controls, stop-when-clean setting, silent/breeze enablement.
+- **Controls:** the Ventilation boost fan turns a temporary room boost on/off.
+  Turning it off **cancels boost** and returns to automatic ventilation; it
+  does **not** stop continuous extraction. A silent-mode switch preserves the
+  configured weekly schedule. An advanced entity service
+  renson_sense.start_boost accepts a level of 1–200% and duration in seconds.
+- **Diagnostics:** heap average, RSSI, uptime, Wi-Fi, motor model, PWM,
+  nominal/minimum airflow and configuration values.
+- **Raw VOC corrected:** the local API labels avoc.raw values (usually around
+  50,000–60,000) ppm, but these are not verified gas concentrations. The
+  existing VOC entity keeps its unique ID and numeric readings; the false
+  ppm unit is removed.
+- **Estimated VOC:** a separate unitless, experimental approximation on the
+  Renson app scale, fitted using 14 timestamped points on 3 November 2026.
+  It is calibrated on one particular Waves device, so another device may
+  require its own baseline. **Not for health or safety decisions.**
+- **Absolute humidity:** removed because it can be calculated from temperature
+  and relative humidity; the device labels its apparent g/m³ values as g/kg.
 
-## Installation (HACS)
+### Upgrade notes
 
-1. In HACS, go to **Integrations → ⋮ → Custom repositories**.
-2. Add this repository URL as type **Integration**.
-3. In HACS → Integrations → **Explore & add**, search for "Renson Sense".
-4. Install the integration and restart Home Assistant.
+Existing unique IDs (entry ID plus keys temperature, humidity, voc, pressure,
+heap and rssi) are preserved, so registered entity IDs should remain intact.
+The raw VOC display name now says "VOC raw"; its old entity ID normally stays
+unchanged. An existing absolute-humidity registry entry is intentionally
+removed. Recorder history is not reconstructed automatically.
 
-## Configuration
+Some metrics are only available for Waves devices and are omitted if an
+endpoint is unsupported by older Sense firmware. Newly available entities
+are discovered on setup/reload. The scan interval is 60 seconds.
 
-1. Go to **Settings → Devices & services → Add integration**.
-2. Search for **Renson Sense**.
-3. Enter:
-   - The local IP address of your Renson Sense device
-   - A friendly name (e.g. "Living room Sense")
+### Install
 
-Repeat the process for each additional device.
+In HACS → Custom repositories, add
+https://github.com/girtsn/ha-renson-sense as an Integration. Install,
+restart HA, then Settings → Devices & services → Add integration →
+Renson Sense. Configure each device's local IP and a friendly name.
 
-The integration will discover which sensor types are present on the device
-(e.g. `temp`, `rh`, `avoc`, `press`, etc.) and create the corresponding
-sensor entities. If a type is not available on a specific device, that
-entity will not be created.
+For this upgrade's test branch, manual installation under
+custom_components/renson_sense/ is possible. Do not install another
+integration controlling the same device at the same time.
+
+### Ventilation boost examples
+
+Use fan.turn_on or fan.set_percentage on the "Ventilation boost" entity
+for an ordinary boost, and fan.turn_off to cancel it. The fan entity's
+percentage reflects its *boost target*, not current measured extraction.
+For actual extraction, use the "Ventilation level" sensor.
+
+An advanced action in Developer Tools → Actions:
+
+    action: renson_sense.start_boost
+    target:
+      entity_id: fan.2fl_bathroom_ventilation_boost
+    data:
+      level: 100
+      duration: 900
+
+### Renson API paths used
+
+| Path | Description |
+| --- | --- |
+| /v1/constellation | Sensor, actuator and identification data |
+| /v1/constellation/sensor | Fallback when a full constellation is unavailable |
+| /v1/constellation/actuator | Fan telemetry fallback |
+| /v1/decision/room | Nominal/minimum airflow, boost and pollutant settings |
+| /v1/decision/silent | Silent mode and weekly schedule |
+| /v1/decision/breeze | Breeze mode (read only) |
+| /v1/global/uptime | Uptime diagnostic |
+| /v1/wifi/client/status | Wi-Fi diagnostic |
+
+Controls use PUT /v1/decision/room/{room}/boost (fallback to
+/v1/decision/room/boost on HTTP 404) and PUT /v1/decision/silent.
+No unverified automatic calibration or Breeze writes are implemented.
+The calibrated installation pressure is not exposed by these known API
+responses; the live pressure sensor is a different measurement.
+
+### Limitations
+
+- Reverse-engineered control endpoints should be validated on your Waves
+  firmware before enabling unattended ventilation automations.
+- The estimated VOC value is **experimental**. It is not ppm, not the
+  manufacturer's official processed value, and not validated on both devices.
+- Long-term statistics require the Recorder integration to include the
+  sensor entity; old 10-day raw history is not magically upgraded.

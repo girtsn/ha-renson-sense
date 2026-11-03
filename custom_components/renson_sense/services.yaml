@@ -1,0 +1,32 @@
+start_boost:
+  name: Start ventilation boost
+  description: >-
+    Start a temporary Waves ventilation boost for the selected fan entity.
+    Canceling a boost returns the fan to automatic ventilation, not zero airflow.
+  target:
+    entity:
+      domain: fan
+      integration: renson_sense
+  fields:
+    level:
+      name: Boost level
+      description: Percent of configured nominal airflow (100 is nominal).
+      example: 100
+      selector:
+        number:
+          min: 1
+          max: 200
+          step: 1
+          unit_of_measurement: "%"
+          mode: box
+    duration:
+      name: Duration
+      description: Boost time in seconds (default taken from the device).
+      example: 1800
+      selector:
+        number:
+          min: 1
+          max: 86400
+          step: 1
+          unit_of_measurement: s
+          mode: box
