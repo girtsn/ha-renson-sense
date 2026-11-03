@@ -160,6 +160,43 @@ SENSORS: list[RensonSensorDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # Device's active humidity/VOC decision thresholds and timings. These are
+    # configuration readings, grouped under Diagnostics rather than main graphs.
+    RensonSensorDescription(
+        key="humidity_static_min", name="Humidity static minimum",
+        source="decision_room", path=("demand", "relative_humidity", "static", "minimum"),
+        native_unit_of_measurement="%", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="humidity_static_max", name="Humidity static maximum",
+        source="decision_room", path=("demand", "relative_humidity", "static", "maximum"),
+        native_unit_of_measurement="%", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="humidity_dynamic_min", name="Humidity dynamic minimum",
+        source="decision_room", path=("demand", "relative_humidity", "dynamic", "minimum"),
+        native_unit_of_measurement="%", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="humidity_average", name="Humidity dynamic average period",
+        source="decision_room", path=("demand", "relative_humidity", "dynamic", "average"),
+        native_unit_of_measurement="s", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="humidity_decay", name="Humidity dynamic decay period",
+        source="decision_room", path=("demand", "relative_humidity", "dynamic", "decay"),
+        native_unit_of_measurement="s", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="voc_average", name="VOC dynamic average period",
+        source="decision_room", path=("demand", "VOC", "dynamic", "average"),
+        native_unit_of_measurement="s", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="voc_decay", name="VOC dynamic decay period",
+        source="decision_room", path=("demand", "VOC", "dynamic", "decay"),
+        native_unit_of_measurement="s", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     RensonSensorDescription(
         key="uptime", name="Uptime", source="uptime", path=("uptime",),
         native_unit_of_measurement="s",
@@ -171,6 +208,10 @@ SENSORS: list[RensonSensorDescription] = [
     ),
     RensonSensorDescription(
         key="wifi_ip", name="Wi-Fi IP", source="wifi", path=("IP",),
+        numeric_value=False, entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
+        key="wifi_mac", name="Wi-Fi MAC", source="wifi", path=("MAC",),
         numeric_value=False, entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]

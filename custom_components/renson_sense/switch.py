@@ -33,6 +33,11 @@ class RensonSilentSwitch(CoordinatorEntity[RensonCoordinator], SwitchEntity):
         self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}}
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        config = self.coordinator.data.get("decision_silent", {})
+        return {key: value for key, value in config.items() if key != "enable"}
+
+    @property
     def is_on(self) -> bool | None:
         enabled = self.coordinator.data.get("decision_silent", {}).get("enable")
         return bool(enabled) if enabled is not None else None

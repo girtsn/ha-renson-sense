@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import aiohttp
+import asyncio
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -18,7 +19,7 @@ async def _test_connection(hass: HomeAssistant, host: str) -> bool:
     try:
         async with session.get(url, timeout=10) as resp:
             return resp.status == 200
-    except aiohttp.ClientError:
+    except (aiohttp.ClientError, asyncio.TimeoutError):
         return False
 
 

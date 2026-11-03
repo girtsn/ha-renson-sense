@@ -56,6 +56,16 @@ class RensonBoost(CoordinatorEntity[RensonCoordinator], FanEntity):
         self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}}
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        boost = nested_value(self.coordinator.data, "decision_room", "boost") or {}
+        return {
+            "room": self._room,
+            "remaining_seconds": boost.get("remaining"),
+            "default_level": boost.get("default_level"),
+            "default_timeout_seconds": boost.get("default_timeout"),
+        }
+
+    @property
     def is_on(self) -> bool | None:
         enabled = nested_value(self.coordinator.data, "decision_room", "boost", "enable")
         return bool(enabled) if enabled is not None else None

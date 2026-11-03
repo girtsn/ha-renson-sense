@@ -105,6 +105,32 @@ class RensonBinary(CoordinatorEntity[RensonCoordinator], BinarySensorEntity):
         self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}}
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose complete control settings for inspection, not alert thresholds."""
+        desc = self.entity_description
+        data = self.coordinator.data or {}
+        if desc.key in (
+            "humidity_dynamic", "humidity_static", "voc_dynamic", "voc_static",
+            "absolute_humidity_control",
+        ):
+            component = {
+                "humidity_dynamic": "relative_humidity",
+                "humidity_static": "relative_humidity",
+                "voc_dynamic": "VOC",
+                "voc_static": "VOC",
+                "absolute_humidity_control": "absolute_humidity",
+            }[desc.key]
+            mode = "static" if desc.key.endswith("static") else "dynamic"
+            settings = nested_value(data, "decision_room", "demand", component, mode)
+            return {k: v for k, v in settings.items() if k != "enable"} if isinstance(settings, dict) else None
+        if desc.key == "boost_active":
+            boost = nested_value(data, "decision_room", "boost")
+            return dict(boost) if isinstance(boost, dict) else None
+        if desc.key == "breeze_enabled":
+            return {"temperature_threshold": nested_value(data, "decision_breeze", "temp_threshold")}
+        return None
+
+    @property
     def is_on(self) -> bool | None:
         desc = self.entity_description
         value = nested_value(self.coordinator.data.get(desc.source), *desc.path)
