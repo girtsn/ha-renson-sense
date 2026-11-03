@@ -1,0 +1,22 @@
+name: Validate integration
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  syntax-and-helpers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate Python syntax
+        run: python -m compileall -q custom_components tests
+      - name: Test pure helper functions
+        run: python -m unittest discover -s tests -v
+      - name: Validate JSON
+        run: |
+          python -m json.tool custom_components/renson_sense/manifest.json > /dev/null
+          python -m json.tool custom_components/renson_sense/strings.json > /dev/null

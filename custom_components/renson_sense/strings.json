@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Renson Sense / Waves",
+        "data": {
+          "host": "Device IP address or host name",
+          "name": "Friendly device name"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the Renson device."
+    }
+  }
+}

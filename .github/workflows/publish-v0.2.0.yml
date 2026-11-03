@@ -1,0 +1,41 @@
+name: Publish Renson Sense v0.2.0
+on:
+  workflow_run:
+    workflows: ["Validate integration"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out validated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Create GitHub release once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c "import json; print(json.load(open('custom_components/renson_sense/manifest.json'))['version'])")
+          if [[ "$VERSION" != "0.2.0" ]]; then
+            echo "Release workflow is limited to 0.2.0; found $VERSION."
+            exit 0
+          fi
+          if gh release view v0.2.0 >/dev/null 2>&1; then
+            echo "Release v0.2.0 already exists."
+            exit 0
+          fi
+          gh release create v0.2.0 \
+            --title "Renson Sense / Waves v0.2.0" \
+            --notes-file RELEASE_NOTES_0.2.0.md \
+            --target "$VALIDATED_SHA"
