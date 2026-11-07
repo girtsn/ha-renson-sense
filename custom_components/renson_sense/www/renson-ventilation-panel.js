@@ -590,12 +590,32 @@ class RensonManagedVentilationPanel extends HTMLElement{
         "Disable silent mode":"Enable silent mode";
     }
   }
+  _mobileMenuButton(){
+    // A custom panel owns its header on narrow screens; HA does not supply one.
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="ha-mobile-menu";
+    button.title="Open Home Assistant menu";
+    button.setAttribute("aria-label","Open Home Assistant menu");
+    const icon=document.createElement("ha-icon");
+    icon.setAttribute("icon","mdi:menu");
+    icon.setAttribute("aria-hidden","true");
+    button.append(icon);
+    button.addEventListener("click",()=>this.dispatchEvent(
+      new Event("hass-toggle-menu",{bubbles:true,composed:true})
+    ));
+    return button;
+  }
   _render(){
     const root=this.shadowRoot;root.replaceChildren();
     const style=this._el("style");
     style.textContent=[
       ":host{display:block;color:var(--primary-text-color);font-family:var(--primary-font-family,Roboto,Arial,sans-serif)}",
       "*{box-sizing:border-box}",
+      ".ha-mobile-menu{display:none;align-items:center;justify-content:center;width:40px;height:40px;flex:0 0 40px;padding:8px;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer}",
+      ".ha-mobile-menu:focus-visible{outline:2px solid var(--primary-color,#03a9f4);outline-offset:2px}",
+      ".heading-group{display:flex;align-items:center;gap:10px;min-width:0}",
+      "@media(max-width:870px){.ha-mobile-menu{display:inline-flex}}",
       ".shell{max-width:1380px;margin:auto;padding:18px 18px 40px}",
       "h1{font-size:26px;font-weight:650;margin:0 0 5px}h2{font-size:18px;font-weight:600;margin:0 0 12px}",
       "p{line-height:1.5}.subtle{color:var(--secondary-text-color,#777);font-size:12px;margin:8px 0}",
@@ -638,7 +658,9 @@ class RensonManagedVentilationPanel extends HTMLElement{
     const label=this._el("div");
     label.append(this._el("h1","Renson Ventilation"),
       this._el("p","Local Waves / Sense · integration-managed dashboard","subtle"));
-    header.append(label);
+    const headingGroup=this._el("div",null,"heading-group");
+    headingGroup.append(this._mobileMenuButton(),label);
+    header.append(headingGroup);
     header.append(this._button("Refresh devices",()=>this._loadRegistry()));
     shell.append(header);
     const notice=this._el("div",this._notice,"notice");notice.dataset.notice="";
