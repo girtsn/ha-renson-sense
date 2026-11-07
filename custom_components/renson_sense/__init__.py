@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 import logging
 from typing import Any
 
+from homeassistant.components import frontend, panel_custom
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -19,6 +22,48 @@ from .const import DOMAIN, CONF_HOST, DEFAULT_SCAN_INTERVAL
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["sensor", "binary_sensor", "fan", "switch"]
+PANEL_PATH = "renson-ventilation"
+PANEL_VERSION = "0.3.0"
+
+
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    """Serve the integration's self-managed frontend without manual resources."""
+    www = Path(__file__).parent / "www"
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                "/renson_sense/managed-panel.js",
+                str(www / "renson-ventilation-panel.js"),
+                cache_headers=False,
+            )
+        ]
+    )
+    return True
+
+
+async def _async_register_ventilation_panel(hass: HomeAssistant) -> None:
+    """Register one sidebar panel regardless of the number of Renson devices."""
+    if frontend.async_panel_exists(hass, PANEL_PATH):
+        return
+    try:
+        await panel_custom.async_register_panel(
+            hass,
+            frontend_url_path=PANEL_PATH,
+            webcomponent_name="renson-managed-ventilation-panel",
+            sidebar_title="Renson Ventilation",
+            sidebar_icon="mdi:fan",
+            module_url=(
+                f"/renson_sense/managed-panel.js?v={PANEL_VERSION}"
+            ),
+            require_admin=False,
+        )
+    except (ValueError, RuntimeError):
+        _LOGGER.warning(
+            "Could not register the integration-managed Renson panel; "
+            "existing entities and dashboards remain available",
+            exc_info=True,
+        )
+
 
 
 class RensonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -88,6 +133,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         registry.async_remove(obsolete)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await _async_register_ventilation_panel(hass)
     return True
 
 
@@ -96,4 +142,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        if not hass.data[DOMAIN]:
+            frontend.async_remove_panel(hass, PANEL_PATH, warn_if_unknown=False)
     return ok
