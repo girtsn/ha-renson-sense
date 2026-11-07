@@ -3,6 +3,16 @@
 Local API integration for Renson Sense and Waves devices. No Renson cloud account
 is needed. Supports multiple device IPs / config entries with distinct names.
 
+## 0.3.1: Clickable device addresses
+
+The configured IP / hostname at the top of each device card is a clickable
+link that opens the local device URL in a new tab. The device-reported Wi-Fi
+IP in Diagnostics is clickable as well. An accessible browser interface is
+not guaranteed; these links only open the device's HTTP address.
+
+Device names, existing entity IDs, and dashboard configuration stay intact.
+After updating via HACS, restart Home Assistant and reload the dashboard.
+
 ## 0.3.0: Integration-managed Renson Ventilation dashboard
 
 A new **Renson Ventilation** sidebar panel is installed automatically when

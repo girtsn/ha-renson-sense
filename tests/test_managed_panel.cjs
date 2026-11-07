@@ -28,7 +28,7 @@ async function main(){
       prompt:()=>typed,
       confirm:()=>confirmed,
     },
-    document:{},
+    document:{createElement:tag=>({tagName:tag.toUpperCase(),textContent:"",className:""})},
     console,
   };
   const filename=path.join(__dirname,"..","custom_components",
@@ -65,6 +65,20 @@ async function main(){
       }]};
     },
   };
+  // Both address fields use links, never a manually copied hostname.
+  const configured=panel._addressLink("192.168.2.60");
+  assert.equal(configured.href,"http://192.168.2.60/");
+  assert.equal(configured.textContent,"192.168.2.60");
+  assert.equal(configured.target,"_blank");
+  assert.equal(configured.rel,"noopener noreferrer");
+  const reported=panel._addressLink("waves.lan:8080");
+  assert.equal(reported.href,"http://waves.lan:8080/");
+  assert.equal(panel._addressLink("javascript:alert(1)"),null);
+  assert.equal(panel._addressLink("http://example.org/"),null);
+  assert.equal(panel._addressLink(""),null);
+  assert.equal(panel._addressLink("unknown"),null);
+  assert.equal(panel._addressLink("unavailable"),null);
+  assert.equal(panel._addressLink("http://example.org/"),null);
   assert.equal(panel._registryKey({unique_id:"abc_def_airflow"}),"airflow");
   assert.equal(panel._registryKey({unique_id:"abc_def_voc_estimated"}),"voc_estimated");
 
