@@ -3,7 +3,17 @@
 Local API integration for Renson Sense and Waves devices. No Renson cloud account
 is needed. Supports multiple device IPs / config entries with distinct names.
 
-## Proposed 0.2.1: Manual maintenance operations
+## 0.2.2: Configured address in device information
+
+The integration's configured host or IP is now shown as a Home Assistant
+device configuration URL (Visit link) and as a new Configured IP / host
+diagnostic sensor, so it can be copied easily from the device's entity list.
+This is separate from the Wi-Fi IP reported by the hardware.
+
+Existing entity IDs, devices, and long-term statistics are preserved.
+Restart Home Assistant after updating via HACS.
+
+## 0.2.1: Manual maintenance operations
 
 Two explicit actions can be invoked on a specific Waves fan entity using
 **Developer Tools → Actions**. They are not part of ordinary polling and will

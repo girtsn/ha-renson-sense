@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import RensonCoordinator
 from .const import CONF_NAME, DOMAIN
+from .device import renson_device_info
 
 
 async def async_setup_entry(
@@ -30,7 +31,7 @@ class RensonSilentSwitch(CoordinatorEntity[RensonCoordinator], SwitchEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_silent_mode_switch"
         self._attr_name = f"{entry.data.get(CONF_NAME, entry.title)} Silent mode"
-        self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}}
+        self._attr_device_info = renson_device_info(entry)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

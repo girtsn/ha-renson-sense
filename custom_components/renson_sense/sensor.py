@@ -18,7 +18,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import RensonCoordinator
-from .const import CONF_NAME, DOMAIN
+from .const import CONF_HOST, CONF_NAME, DOMAIN
+from .device import renson_device_info
 from .helpers import estimated_voc, nested_value, numeric, typed_node, ventilation_percentage
 
 
@@ -203,6 +204,11 @@ SENSORS: list[RensonSensorDescription] = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     RensonSensorDescription(
+        key="configured_host", name="Configured IP / host", source="config",
+        path=(CONF_HOST,), numeric_value=False,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RensonSensorDescription(
         key="wifi_ssid", name="Wi-Fi SSID", source="wifi", path=("ssid",),
         numeric_value=False, entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -217,9 +223,15 @@ SENSORS: list[RensonSensorDescription] = [
 ]
 
 
-def _has_value(data: dict[str, Any], desc: RensonSensorDescription) -> bool:
-    """Discover only metrics actually returned by this device."""
-    if desc.source in ("sensor", "actuator"):
+def _has_value(
+    data: dict[str, Any],
+    desc: RensonSensorDescription,
+    configured: dict[str, Any],
+) -> bool:
+    """Discover device metrics and configured destination independently."""
+    if desc.source == "config":
+        node = configured
+    elif desc.source in ("sensor", "actuator"):
         node = typed_node(data.get(desc.source), desc.node_type or "")
     else:
         node = data.get(desc.source, {})
@@ -234,7 +246,7 @@ async def async_setup_entry(
     data = coordinator.data or {}
     async_add_entities([
         RensonSensor(coordinator, entry, description)
-        for description in SENSORS if _has_value(data, description)
+        for description in SENSORS if _has_value(data, description, entry.data)
     ])
 
 
@@ -249,22 +261,23 @@ class RensonSensor(CoordinatorEntity[RensonCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
+        self._configured = entry.data
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_name = f"{entry.data.get(CONF_NAME, entry.title)} {description.name}"
         global_info = coordinator.data.get("global", {})
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": entry.title,
-            "manufacturer": "Renson",
-            "model": nested_value(global_info, "product_name", "value") or "Sense / Waves",
-            "sw_version": nested_value(global_info, "firmware_version", "value"),
-        }
+        self._attr_device_info = renson_device_info(
+            entry,
+            model=nested_value(global_info, "product_name", "value") or "Sense / Waves",
+            sw_version=nested_value(global_info, "firmware_version", "value"),
+        )
 
     @property
     def native_value(self) -> Any:
         data = self.coordinator.data or {}
         desc = self.entity_description
-        if desc.source in ("sensor", "actuator"):
+        if desc.source == "config":
+            node = self._configured
+        elif desc.source in ("sensor", "actuator"):
             node = typed_node(data.get(desc.source), desc.node_type or "")
         else:
             node = data.get(desc.source, {})
