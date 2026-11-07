@@ -114,6 +114,9 @@ async function main(){
   assert.deepEqual(imports,["0.3.4","0.3.5","0.3.6"]);
 
   panel.connectedCallback();
+  // connectedCallback starts an asynchronous manifest check; finish it before
+  // simulating focus and visibility events to avoid a race in the test.
+  await new Promise(resolve=>setImmediate(resolve));
   assert.ok(timer);
   assert.ok(events.window_focus);
   assert.ok(events.document_visibilitychange);

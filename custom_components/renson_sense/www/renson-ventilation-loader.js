@@ -18,7 +18,7 @@ class RensonVentilationLoaderPanel extends HTMLElement{
     this._timer=null;
     this._loadRetries=new Map();
     this._onFocus=()=>this._check();
-    this._onVisible=()=>{if(!document.hidden)this._check();};
+    this._onVisible=()=>document.hidden?undefined:this._check();
     const style=document.createElement("style");
     style.textContent=":host{display:block}.message{padding:10px 16px;font:13px var(--primary-font-family,Arial);color:var(--secondary-text-color,#777)}.message:empty{display:none}";
     this._notice=document.createElement("div");
