@@ -3,6 +3,38 @@
 Local API integration for Renson Sense and Waves devices. No Renson cloud account
 is needed. Supports multiple device IPs / config entries with distinct names.
 
+## 0.3.0: Integration-managed Renson Ventilation dashboard
+
+A new **Renson Ventilation** sidebar panel is installed automatically when
+at least one Renson Sense/Waves integration entry is present. It is inspired
+by the integration-managed tado X Heating sidebar panel and is bundled in
+this HACS integration, including its JavaScript and graph controls.
+
+- Shows **all configured Renson devices**, identified via Home Assistant's
+  device/entity registries rather than hard-coded names or entity IDs.
+- Controls at the top: per-device **boost level and duration**, Start/Stop
+  boost, and the **silent mode** switch. Device actions require a click and
+  explicit confirmation; calibration and restart are not dashboard buttons.
+- Live airflow (m³/h), ventilation %, fan RPM, temperature, relative humidity,
+  experimental estimated VOC, and boost status.
+- **Two independent time horizons** (short and long): 24h / 7d / 30d and
+  90d / 1 year / 3 years. Select metric and one/all devices.
+- Uses local Home Assistant Recorder statistics via WebSocket; no new polling,
+  database, YAML dashboard, or custom card resource setup. Lines compare the
+  *same metric* across devices; no misleading combined y-axis.
+- User-created dashboards and automations remain unchanged.
+- The JavaScript module uses the manifest-versioned URL to refresh when a new
+  HACS release is installed, then Home Assistant is restarted.
+
+Older historical statistics are not backfilled: three-year views initially
+show only the measurements available since long-term recording started. If
+Recorder excludes the Renson sensors, the graphs will be empty. The estimated
+VOC is an approximate unitless index, **not a health/safety measurement**.
+
+After updating through HACS and restarting Home Assistant, choose
+**Renson Ventilation** in the sidebar. You can keep your existing custom
+ventilation dashboards independently.
+
 ## 0.2.2: Configured address in device information
 
 The integration's configured host or IP is now shown as a Home Assistant
