@@ -3,8 +3,8 @@
  * works with multiple devices, customized entity IDs, and normal HACS updates.
  * Sensor values and history come exclusively from Home Assistant.
  */
-const RV_PANEL_VERSION="0.3.3";
-const RV_UPDATE_CHECK_MS=2*60*1000;
+const RV_PANEL_VERSION="0.3.4";
+const RV_PICKER_NAME="renson-ventilation-date-range-v"+RV_PANEL_VERSION.replace(/\./g,"-");
 const RV_METRICS=[
   {key:"airflow",label:"Airflow",unit:"m³/h"},
   {key:"ventilation_level",label:"Ventilation level",unit:"%"},
@@ -15,18 +15,15 @@ const RV_METRICS=[
   {key:"fan_rpm",label:"Fan speed",unit:"rpm"},
   {key:"pressure",label:"Live pressure",unit:"Pa"},
 ];
-const RV_PERIODS={
-  short:[
-    {key:"24h",label:"24 hours",days:1,interval:"5minute"},
-    {key:"7d",label:"7 days",days:7,interval:"hour"},
-    {key:"30d",label:"30 days",days:30,interval:"day"},
-  ],
-  long:[
-    {key:"90d",label:"90 days",days:90,interval:"day"},
-    {key:"1y",label:"1 year",days:366,interval:"week"},
-    {key:"3y",label:"3 years",days:1096,interval:"month"},
-  ],
+const rvRecorderPeriod=range=>{
+  const days=(Date.parse(range.end)-Date.parse(range.start))/86400000;
+  if(days<=3)return "5minute";
+  if(days<=14)return "hour";
+  if(days<=180)return "day";
+  if(days<=550)return "week";
+  return "month";
 };
+let rvPresetRange=null;
 const RV_COLORS=["#377dd2","#e18a32","#1a997c","#9b6ec8","#b9505b"];
 const RV_LIVE=[
   ["airflow","Airflow","m³/h"],["ventilation_level","Ventilation","%"],
@@ -48,81 +45,51 @@ class RensonManagedVentilationPanel extends HTMLElement{
     this._prefs=new Map();
     this._notice="";
     this._registryError="";
-    this._versionTimer=null;
-    this._versionChecking=false;
-    this._charts={
-      short:{metric:"airflow",period:"24h",selected:"all",loading:false,series:[],error:"",request:0,lastLoad:0},
-      long:{metric:"humidity",period:"90d",selected:"all",loading:false,series:[],error:"",request:0,lastLoad:0},
-    };
+    this._range=null;this._selectedDevice="all";
+    this._assetsReady=false;this._assetPromise=null;
+    this._assetError="";this._assetRetries=0;
+    this._history={};this._historyError="";this._historyLoading=false;
+    this._historyToken=0;this._historyRefresh=0;this._historyPeriod="hour";
   }
   set hass(hass){
     this._hass=hass;
+    if(!this._assetsReady){
+      this._ensureAssets();return;
+    }
     if(!this._registered&&!this._loading&&this.isConnected)this._loadRegistry();
     else{
       this._updateLive();
-      for(const [kind,c] of Object.entries(this._charts)){
-        if(this._registered&&!c.loading&&Date.now()-c.lastLoad>15*60000)
-          this._loadChart(kind);
-      }
+      if(this._registered&&!this._historyLoading&&!this._busy.size&&
+         Date.now()-this._historyRefresh>15*60000)this._loadHistory();
     }
   }
   set panel(panel){this._panel=panel;}
   set narrow(value){this._narrow=!!value;}
   set route(value){this._route=value;}
   connectedCallback(){
-    if(this._hass&&!this._registered&&!this._loading)this._loadRegistry();
-    if(this._versionTimer===null){
-      // A tab can remain open across HACS upgrades. Poll a no-cache manifest
-      // and reload once when the installed integration version changes.
-      this._checkInstalledVersion();
-      this._versionTimer=window.setInterval(
-        ()=>this._checkInstalledVersion(),RV_UPDATE_CHECK_MS
-      );
-    }
+    this._ensureAssets();
+    if(this._assetsReady&&this._hass&&!this._registered&&!this._loading)
+      this._loadRegistry();
   }
-  disconnectedCallback(){
-    if(this._versionTimer!==null){
-      window.clearInterval(this._versionTimer);
-      this._versionTimer=null;
-    }
-  }
-  async _checkInstalledVersion(){
-    if(this._versionChecking||!this.isConnected)return;
-    this._versionChecking=true;
-    try{
-      const response=await fetch(
-        "/renson_sense/manifest.json?check="+Date.now(),{cache:"no-store"}
-      );
-      if(!response.ok)return;
-      const info=await response.json();
-      const version=info?.version;
-      if(typeof version!=="string"||!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version)||
-         version===RV_PANEL_VERSION)return;
-      if(this._busy.size){
-        this._noticeText("New Renson dashboard "+version+
-          " available. It will reload after the current operation.");
-        return;
-      }
-      // Prevent an infinite loop if a proxy or browser service worker keeps
-      // serving the previous JS even after a full reload.
-      const key="renson-panel-reload-attempt-"+version;
-      try{
-        if(window.sessionStorage.getItem(key)!=="1"){
-          window.sessionStorage.setItem(key,"1");
-          window.location.reload();
-          return;
-        }
-      }catch(_err){
-        // Browser storage may be restricted. The user can still hard-refresh.
-      }
-      this._noticeText("New Renson dashboard "+version+
-        " is installed, but this tab still has "+RV_PANEL_VERSION+
-        ". Close and reopen it, or press Ctrl+Shift+R to bypass browser cache.");
-    }catch(_err){
-      // Home Assistant may be restarting during an update. Retry later.
-    }finally{
-      this._versionChecking=false;
-    }
+  _ensureAssets(){
+    if(this._assetsReady||this._assetPromise||!this.isConnected)return;
+    this._assetError="";
+    const retry=this._assetRetries?"&retry="+this._assetRetries:"";
+    this._assetPromise=import(
+      "./renson-ventilation-date-range-picker.js?v="+RV_PANEL_VERSION+retry
+    ).then(module=>{
+      rvPresetRange=module.rvPresetRange;
+      if(typeof rvPresetRange!=="function")throw Error("Date selector export unavailable");
+      this._range??=rvPresetRange("last7");
+      this._assetsReady=true;
+      if(this._hass&&!this._registered&&!this._loading)this._loadRegistry();
+    }).catch(err=>{
+      this._assetRetries++;
+      this._assetError="Date selector did not load: "+(err?.message||String(err));
+    }).finally(()=>{
+      this._assetPromise=null;
+      if(this._hass&&this.isConnected)this._render();
+    });
   }
   _el(tag,text,css){
     const el=document.createElement(tag);
@@ -243,10 +210,7 @@ class RensonManagedVentilationPanel extends HTMLElement{
       this._registered=false;
     }finally{
       this._loading=false;this._render();
-      if(this._registered){
-        this._loadChart("short");
-        this._loadChart("long");
-      }
+      if(this._registered)this._loadHistory();
     }
   }
   _noticeText(message){
@@ -426,199 +390,157 @@ class RensonManagedVentilationPanel extends HTMLElement{
   }
   _statisticId(dev,key){
     const id=this._entity(dev,key);
-    const state=id?this._hass?.states?.[id]:null;
-    return state?.attributes?.state_class==="measurement"?id:null;
+    return id&&this._hass?.states?.[id]?.attributes?.state_class==="measurement" ? id : null;
   }
-  async _loadChart(kind){
-    const chart=this._charts[kind];
-    if(!this._hass||!this._registered)return;
-    chart.loading=true;
-    chart.error="";
-    chart.request++;
-    const request=chart.request;
-    this._drawChart(kind);
+  async _loadHistory(){
+    if(!this._hass||!this._registered||!this._assetsReady||!this._range)return;
+    const token=++this._historyToken;
+    this._historyLoading=true;this._historyError="";
+    const ids=[...new Set(this._devices.flatMap(dev=>
+      RV_METRICS.map(metric=>this._statisticId(dev,metric.key)).filter(Boolean)
+    ))];
+    this._drawAllCharts();
     try{
-      const selected=this._devices.filter(d=>chart.selected==="all"||d.key===chart.selected);
-      const pairs=selected.map(dev=>({dev,id:this._statisticId(dev,chart.metric)})).filter(x=>x.id);
-      if(!pairs.length){
-        chart.series=[];chart.error="No matching numeric sensors with Recorder statistics metadata.";
+      if(!ids.length){
+        this._history={};
+        this._historyError="No statistics-enabled Renson sensors were found.";
         return;
       }
-      const period=RV_PERIODS[kind].find(p=>p.key===chart.period);
-      const end=new Date(),start=new Date(end.getTime()-period.days*86400000);
-      const result=await this._hass.callWS({
+      const period=rvRecorderPeriod(this._range);
+      const data=await this._hass.callWS({
         type:"recorder/statistics_during_period",
-        start_time:start.toISOString(),end_time:end.toISOString(),
-        statistic_ids:pairs.map(p=>p.id),
-        period:period.interval,types:["mean","min","max"],
+        start_time:this._range.start,end_time:this._range.end,
+        statistic_ids:ids,period,types:["mean","min","max"]
       });
-      if(request!==chart.request)return;
-      chart.series=pairs.map(({dev,id},index)=>({
-        device:dev.name,color:RV_COLORS[index%RV_COLORS.length],id,
-        rows:(Array.isArray(result?.[id])?result[id]:[])
-          .filter(row=>row.mean!==null&&row.mean!==undefined&&Number.isFinite(Number(row.mean))&&Number.isFinite(Number(row.start)))
-          .map(row=>({x:Number(row.start),y:Number(row.mean),min:row.min,max:row.max}))
-          .sort((a,b)=>a.x-b.x),
-      }));
-      chart.lastLoad=Date.now();
+      if(token!==this._historyToken)return;
+      this._history=data||{};
+      this._historyPeriod=period;this._historyRefresh=Date.now();
     }catch(err){
-      if(request!==chart.request)return;
-      chart.series=[];
-      chart.error="History unavailable: "+(err?.message||String(err));
-      chart.lastLoad=Date.now();
+      if(token!==this._historyToken)return;
+      this._history={};
+      this._historyError="Recorder history unavailable: "+(err?.message||String(err));
+      this._historyRefresh=Date.now();
     }finally{
-      if(request===chart.request){
-        chart.loading=false;
-        this._drawChart(kind);
+      if(token===this._historyToken){
+        this._historyLoading=false;this._drawAllCharts();
       }
     }
-  }
-  _date(ts,period){
-    const date=new Date(ts);
-    return period==="24h"||period==="7d"?
-      date.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):
-      date.toLocaleDateString(undefined,{month:"short",year:"numeric",day:"numeric"});
   }
   _svg(tag,attrs={}){
     const el=document.createElementNS("http://www.w3.org/2000/svg",tag);
     for(const [key,value] of Object.entries(attrs))el.setAttribute(key,String(value));
     return el;
   }
-  _drawChart(kind){
-    const chart=this._charts[kind];
-    const surface=this.shadowRoot?.querySelector('[data-chart-plot="'+kind+'"]');
-    if(!surface)return;
+  _seriesFor(metric){
+    return this._devices
+      .filter(dev=>this._selectedDevice==="all"||dev.key===this._selectedDevice)
+      .map((dev,index)=>{
+        const id=this._statisticId(dev,metric);
+        const rows=id&&Array.isArray(this._history[id])?this._history[id]:[];
+        return {id,name:dev.name,color:RV_COLORS[index%RV_COLORS.length],
+          rows:rows.filter(p=>p.mean!=null&&Number.isFinite(Number(p.mean))&&
+             Number.isFinite(Number(p.start)))
+            .map(p=>({x:Number(p.start),y:Number(p.mean)}))
+            .sort((x,y)=>x.x-y.x)};
+      }).filter(s=>s.id);
+  }
+  _date(ts){
+    const d=new Date(ts),range=this._range;
+    const days=(Date.parse(range.end)-Date.parse(range.start))/86400000;
+    return days<=3?d.toLocaleString(undefined,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):
+      days>550?d.toLocaleDateString(undefined,{month:"short",year:"numeric"}):
+      d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"2-digit"});
+  }
+  _drawAllCharts(){
+    for(const metric of RV_METRICS)this._drawChart(metric);
+  }
+  _drawChart(metric){
+    const surface=this.shadowRoot?.querySelector('[data-chart-plot="'+metric.key+'"]');
+    if(!surface||!this._range)return;
     surface.replaceChildren();
-    if(chart.loading){surface.append(this._el("p","Loading Recorder history…","subtle"));return;}
-    if(chart.error){surface.append(this._el("p",chart.error,"warning"));return;}
-    const visible=chart.series.filter(s=>s.rows.length);
-    if(!visible.length){
+    if(this._historyLoading){
+      surface.append(this._el("p","Loading Recorder history…","subtle"));return;
+    }
+    if(this._historyError){
+      surface.append(this._el("p",this._historyError,"warning"));return;
+    }
+    const series=this._seriesFor(metric.key).filter(s=>s.rows.length);
+    if(!series.length){
       surface.append(this._el("p",
-        "No recorded statistics in this period yet. Long-term history starts "+
-        "when Recorder begins collecting these sensors; older readings are not backfilled.",
-        "subtle"));
-      return;
+        "No recorded statistics for this period. Earlier data is not backfilled.",
+        "subtle"));return;
     }
-    const period=RV_PERIODS[kind].find(p=>p.key===chart.period);
-    const end=Date.now(),start=end-period.days*86400000;
-    const pts=visible.flatMap(s=>s.rows.filter(p=>p.x>=start&&p.x<=end).map(p=>p.y));
-    if(!pts.length){
-      surface.append(this._el("p","There are no statistics in the selected interval.","subtle"));return;
+    const start=Date.parse(this._range.start),end=Date.parse(this._range.end);
+    if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)return;
+    const values=series.flatMap(s=>s.rows.filter(p=>p.x>=start&&p.x<end).map(p=>p.y));
+    if(!values.length){
+      surface.append(this._el("p","No statistics in the selected interval.","subtle"));return;
     }
-    let min=Math.min(...pts),max=Math.max(...pts);
-    const pad=Math.max((max-min)*0.10,Math.max(Math.abs(max),1)*0.015);
+    let min=Math.min(...values),max=Math.max(...values);
+    const pad=Math.max((max-min)*0.1,Math.max(Math.abs(max),1)*0.015);
     min-=pad;max+=pad;
-    if(min===max){min-=1;max+=1;}
-    const W=900,H=290,L=67,R=18,T=18,B=45;
+    const W=800,H=270,L=63,R=16,T=12,B=40;
     const X=x=>L+Math.max(0,Math.min(1,(x-start)/(end-start)))*(W-L-R);
     const Y=y=>T+(max-y)/(max-min)*(H-T-B);
     const svg=this._svg("svg",{viewBox:"0 0 "+W+" "+H,role:"img",
-      "aria-label":this._metric(chart.metric).label+" statistics"});
+      "aria-label":metric.label+" statistics"});
     for(let i=0;i<=4;i++){
-      const y=T+(H-T-B)*i/4,v=max-(max-min)*i/4;
+      const y=T+i*(H-T-B)/4,v=max-(max-min)*i/4;
       svg.append(this._svg("line",{x1:L,x2:W-R,y1:y,y2:y,
         stroke:"var(--divider-color,#999)","stroke-width":0.8,opacity:0.5}));
-      const label=this._svg("text",{x:L-8,y:y+4,"text-anchor":"end",
-        fill:"var(--secondary-text-color,#777)","font-size":13});
-      label.textContent=Number(v.toFixed(Math.abs(v)<20?2:0)).toLocaleString();
-      svg.append(label);
+      const tx=this._svg("text",{x:L-7,y:y+4,"text-anchor":"end",
+        fill:"var(--secondary-text-color,#777)","font-size":12});
+      tx.textContent=Number(v.toFixed(Math.abs(v)<20?2:0)).toLocaleString();
+      svg.append(tx);
     }
-    for(const [x,pos] of [[start,"start"],[(start+end)/2,"middle"],[end,"end"]]){
-      const label=this._svg("text",{x:X(x),y:H-10,"text-anchor":pos,
-        fill:"var(--secondary-text-color,#777)","font-size":13});
-      label.textContent=this._date(x,chart.period);
-      svg.append(label);
+    for(const [x,align] of [[start,"start"],[(start+end)/2,"middle"],[end,"end"]]){
+      const txt=this._svg("text",{x:X(x),y:H-8,"text-anchor":align,
+        fill:"var(--secondary-text-color,#777)","font-size":12});
+      txt.textContent=this._date(x);svg.append(txt);
     }
-    for(const series of visible){
-      const rows=series.rows.filter(p=>p.x>=start&&p.x<=end);
-      const maxGap=period.interval==="5minute"?90*60000:
-        period.interval==="hour"?4*3600000:
-        period.interval==="day"?4*86400000:
-        period.interval==="week"?25*86400000:65*86400000;
-      let lines=[],line=[],last=null;
-      for(const point of rows){
-        if(last!==null&&point.x-last>maxGap&&line.length){lines.push(line);line=[];}
-        line.push(point);last=point.x;
+    const gap=this._historyPeriod==="5minute"?90*60000:
+      this._historyPeriod==="hour"?4*3600000:
+      this._historyPeriod==="day"?4*86400000:
+      this._historyPeriod==="week"?25*86400000:65*86400000;
+    for(const group of series){
+      const rows=group.rows.filter(p=>p.x>=start&&p.x<end);
+      let chunks=[],chunk=[],prev=null;
+      for(const pt of rows){
+        if(prev!==null&&pt.x-prev>gap&&chunk.length){chunks.push(chunk);chunk=[];}
+        chunk.push(pt);prev=pt.x;
       }
-      if(line.length)lines.push(line);
-      for(const segment of lines){
-        if(segment.length>=2){
+      if(chunk.length)chunks.push(chunk);
+      for(const segment of chunks){
+        if(segment.length>1){
           svg.append(this._svg("polyline",{
-            points:segment.map(p=>X(p.x)+","+Y(p.y)).join(" "),
-            fill:"none",stroke:series.color,"stroke-width":2.5,
-            "stroke-linejoin":"round","stroke-linecap":"round",
+            points:segment.map(pt=>X(pt.x)+","+Y(pt.y)).join(" "),
+            fill:"none",stroke:group.color,"stroke-width":2.5,
+            "stroke-linecap":"round","stroke-linejoin":"round"
           }));
-        }else if(segment.length===1){
+        }else if(segment.length){
           svg.append(this._svg("circle",{
-            cx:X(segment[0].x),cy:Y(segment[0].y),r:3.4,fill:series.color,
+            cx:X(segment[0].x),cy:Y(segment[0].y),r:3.5,fill:group.color
           }));
         }
       }
     }
     surface.append(svg);
     const legend=this._el("div",null,"legend");
-    for(const series of visible){
+    for(const s of series){
       const item=this._el("div",null,"legend-item");
-      const dot=this._el("i");dot.style.background=series.color;
-      item.append(dot,this._el("span",series.device+
-        " · "+series.rows.length+" intervals"));
+      const dot=this._el("i");dot.style.background=s.color;
+      item.append(dot,this._el("span",s.name+" · "+s.rows.length+" intervals"));
       legend.append(item);
     }
-    surface.append(legend);
-    surface.append(this._el("p",
-      "Recorder "+period.interval+" mean values · "+
-      this._metric(chart.metric).label+
-      (this._metric(chart.metric).unit?" ("+this._metric(chart.metric).unit+")":"")+
-      ". Missing intervals are not interpolated.",
+    surface.append(legend,this._el("p",
+      "Recorder "+this._historyPeriod+" means · Historical gaps are not filled.",
       "subtle"));
   }
-  _chartSection(kind){
-    const chart=this._charts[kind], short=kind==="short";
+  _chartSection(metric){
     const sec=this._el("section",null,"chart-card");
-    sec.append(this._el("h2",short?"Short-term trends":"Long-term trends"));
-    const toolbar=this._el("div",null,"chart-toolbar");
-    const metricLabel=this._el("label","Measurement");
-    const metric=this._el("select");
-    for(const m of RV_METRICS){
-      const opt=this._el("option",m.label);opt.value=m.key;
-      if(chart.metric===m.key)opt.selected=true;
-      metric.append(opt);
-    }
-    metric.addEventListener("change",()=>{
-      chart.metric=metric.value;this._loadChart(kind);
-    });
-    metricLabel.append(metric);toolbar.append(metricLabel);
-    const deviceLabel=this._el("label","Ventilator");
-    const deviceSelect=this._el("select");
-    const option=this._el("option","All ventilators");
-    option.value="all";deviceSelect.append(option);
-    for(const dev of this._devices){
-      const opt=this._el("option",dev.name);opt.value=dev.key;
-      if(chart.selected===dev.key)opt.selected=true;
-      deviceSelect.append(opt);
-    }
-    deviceSelect.addEventListener("change",()=>{
-      chart.selected=deviceSelect.value;this._loadChart(kind);
-    });
-    deviceLabel.append(deviceSelect);toolbar.append(deviceLabel);
-    sec.append(toolbar);
-    const periods=this._el("nav",null,"periods");
-    for(const p of RV_PERIODS[kind]){
-      const btn=this._button(p.label,()=>{
-        if(chart.period===p.key)return;
-        chart.period=p.key;
-        this._render();
-        this._loadChart(kind);
-      },chart.period===p.key?"selected":"");
-      btn.setAttribute("aria-pressed",String(chart.period===p.key));
-      periods.append(btn);
-    }
-    periods.append(this._button("Refresh",()=>this._loadChart(kind)));
-    sec.append(periods);
+    sec.append(this._el("h2",metric.label+(metric.unit?" ("+metric.unit+")":"")));
     const plot=this._el("div",null,"chart-surface");
-    plot.dataset.chartPlot=kind;
-    sec.append(plot);
-    return sec;
+    plot.dataset.chartPlot=metric.key;sec.append(plot);return sec;
   }
   _updateLive(){
     if(!this._hass||!this._registered)return;
@@ -701,7 +623,9 @@ class RensonManagedVentilationPanel extends HTMLElement{
       "summary{cursor:pointer;color:var(--primary-color,#268bd2)}.diagnostics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:12px 0}",
       ".diag{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px}.diag span{color:var(--secondary-text-color,#777)}",
       ".maintenance-controls{margin:12px 0}.warning{color:var(--error-color,#d64740);font-size:13px}",
-      ".charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,590px),1fr));gap:16px;margin-top:20px}",
+      ".history-toolbar{position:relative;z-index:5;padding:14px 18px;margin-top:20px;border-radius:12px;background:var(--card-background-color,var(--ha-card-background,#fff));border:1px solid var(--divider-color,#ddd)}",
+      ".history-tools{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.history-tools label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--secondary-text-color,#777)}",
+      ".charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,580px),1fr));gap:16px;margin-top:14px}",
       ".chart-toolbar{margin:4px 0 13px}.periods{margin-bottom:12px}.periods button{padding:8px 12px}",
       ".chart-surface svg{width:100%;height:auto;display:block}.legend{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 6px}",
       ".legend-item{display:flex;align-items:center;gap:6px;font-size:12px}.legend-item i{display:inline-block;width:10px;height:10px;border-radius:50%}",
@@ -719,7 +643,13 @@ class RensonManagedVentilationPanel extends HTMLElement{
     shell.append(header);
     const notice=this._el("div",this._notice,"notice");notice.dataset.notice="";
     shell.append(notice);
-    if(this._loading){
+    if(this._assetError){
+      shell.append(this._el("p",this._assetError,"warning"));
+      shell.append(this._button("Retry date picker",()=>this._ensureAssets()));
+    }
+    if(!this._assetsReady){
+      shell.append(this._el("p","Loading history date selector…","subtle"));
+    }else if(this._loading){
       shell.append(this._el("p","Discovering Renson devices and entities…","subtle"));
     }else if(this._registryError){
       shell.append(this._el("p",this._registryError,"warning"));
@@ -729,8 +659,32 @@ class RensonManagedVentilationPanel extends HTMLElement{
       const devices=this._el("section",null,"devices");
       for(const dev of this._devices)devices.append(this._controlRow(dev));
       shell.append(devices);
+      const filter=this._el("section",null,"history-toolbar");
+      filter.append(this._el("h2","Ventilation statistics"));
+      filter.append(this._el("p","One date selector for all history charts","subtle"));
+      const actions=this._el("div",null,"history-tools");
+      const picker=this._el(RV_PICKER_NAME);
+      picker.range=this._range;
+      picker.addEventListener("date-range-changed",event=>{
+        this._range=event.detail;this._loadHistory();
+      });
+      actions.append(picker);
+      const label=this._el("label","Ventilator");
+      const select=this._el("select");
+      const opt=this._el("option","All ventilators");opt.value="all";select.append(opt);
+      for(const dev of this._devices){
+        const option=this._el("option",dev.name);
+        option.value=dev.key;select.append(option);
+      }
+      select.value=this._selectedDevice;
+      select.addEventListener("change",()=>{
+        this._selectedDevice=select.value;this._drawAllCharts();
+      });
+      label.append(select);actions.append(label);
+      actions.append(this._button("Refresh history",()=>this._loadHistory()));
+      filter.append(actions);shell.append(filter);
       const charts=this._el("section",null,"charts");
-      charts.append(this._chartSection("short"),this._chartSection("long"));
+      for(const metric of RV_METRICS)charts.append(this._chartSection(metric));
       shell.append(charts);
       shell.append(this._el("p",
         "Frontend v"+RV_PANEL_VERSION+" · Managed by the Renson integration. "+
@@ -740,10 +694,12 @@ class RensonManagedVentilationPanel extends HTMLElement{
     }
     root.append(shell);
     this._updateLive();
-    this._drawChart("short");
-    this._drawChart("long");
+    this._drawAllCharts();
   }
 }
-if(!customElements.get("renson-managed-ventilation-panel")){
-  customElements.define("renson-managed-ventilation-panel",RensonManagedVentilationPanel);
+// Unique tag per version: customElements definitions cannot be replaced in
+// a single Home Assistant browser tab. The stable loader swaps the child.
+const RV_ELEMENT_NAME="renson-managed-ventilation-v"+RV_PANEL_VERSION.replace(/\./g,"-");
+if(!customElements.get(RV_ELEMENT_NAME)){
+  customElements.define(RV_ELEMENT_NAME,RensonManagedVentilationPanel);
 }
