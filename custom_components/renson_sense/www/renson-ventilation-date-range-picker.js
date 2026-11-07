@@ -192,7 +192,11 @@ class RensonVentilationDateRangePicker extends HTMLElement {
     right.append(footer);popup.append(right);root.append(popup);
   }
 }
-if(!customElements.get("renson-ventilation-date-range-picker"))
-  customElements.define("renson-ventilation-date-range-picker",RensonVentilationDateRangePicker);
+// One picker definition per integration release: a custom element's class
+// cannot be redefined in a running Home Assistant browser tab.
+const RV_PICKER_VERSION=new URL(import.meta.url).searchParams.get("v")||"dev";
+const RV_PICKER_TAG="renson-ventilation-date-range-v"+RV_PICKER_VERSION.replace(/\./g,"-");
+if(!customElements.get(RV_PICKER_TAG))
+  customElements.define(RV_PICKER_TAG,RensonVentilationDateRangePicker);
 
 export { rvPresetRange };

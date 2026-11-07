@@ -4,6 +4,7 @@
  * Sensor values and history come exclusively from Home Assistant.
  */
 const RV_PANEL_VERSION="0.3.4";
+const RV_PICKER_NAME="renson-ventilation-date-range-v"+RV_PANEL_VERSION.replace(/\./g,"-");
 const RV_METRICS=[
   {key:"airflow",label:"Airflow",unit:"m³/h"},
   {key:"ventilation_level",label:"Ventilation level",unit:"%"},
@@ -662,7 +663,7 @@ class RensonManagedVentilationPanel extends HTMLElement{
       filter.append(this._el("h2","Ventilation statistics"));
       filter.append(this._el("p","One date selector for all history charts","subtle"));
       const actions=this._el("div",null,"history-tools");
-      const picker=this._el("renson-ventilation-date-range-picker");
+      const picker=this._el(RV_PICKER_NAME);
       picker.range=this._range;
       picker.addEventListener("date-range-changed",event=>{
         this._range=event.detail;this._loadHistory();
