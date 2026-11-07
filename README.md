@@ -3,6 +3,26 @@
 Local API integration for Renson Sense and Waves devices. No Renson cloud account
 is needed. Supports multiple device IPs / config entries with distinct names.
 
+## 0.3.3: Fix actual temperature vs Breeze setpoint mix-up
+
+The dashboard previously matched entity IDs by their suffix. Both the real
+temperature sensor (unique ID `<entry>_temperature`) and the Breeze
+temperature threshold (unique ID `<entry>_breeze_temperature`) matched the
+same `temperature` display slot. Depending on registry order, the dashboard
+displayed the Breeze threshold (often exactly **30°C**) instead of actual
+bathroom temperature (for example, **25.3°C**). Temperature graphs could also
+use the wrong statistic.
+
+Entity discovery now requires an **exact unique ID** derived from the specific
+device's Home Assistant configuration entry ID and the expected key. It also
+rejects configuration and unrelated sensors with similar suffixes. Regression
+tests cover both ordering permutations and verify live display bindings and
+the temperature-statistics query for two separate devices.
+
+The Renson temperature sensor entity itself and its existing Recorder history
+are unchanged. Already-collected real temperature statistics are preserved,
+and the dashboard now queries the correct statistics ID.
+
 ## 0.3.2: Reliable configured address and frontend cache refresh
 
 The dashboard now uses the **configured host diagnostic sensor** when present,

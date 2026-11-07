@@ -3,7 +3,7 @@
  * works with multiple devices, customized entity IDs, and normal HACS updates.
  * Sensor values and history come exclusively from Home Assistant.
  */
-const RV_PANEL_VERSION="0.3.2";
+const RV_PANEL_VERSION="0.3.3";
 const RV_UPDATE_CHECK_MS=2*60*1000;
 const RV_METRICS=[
   {key:"airflow",label:"Airflow",unit:"m³/h"},
@@ -190,16 +190,23 @@ class RensonManagedVentilationPanel extends HTMLElement{
     link.title="Open the device address in a new tab (a web interface may not be available)";
     return link;
   }
-  _registryKey(entry){
+  _registryKey(entry, configEntryId){
+    // Each integration entity has unique_id "<config entry id>_<exact key>".
+    // Suffix matching was unsafe: breeze_temperature also ends in
+    // "_temperature" and overwrote the real air temperature with 30°C.
+    if(typeof configEntryId!=="string"||!configEntryId)return null;
+    const prefix=configEntryId+"_";
     const uid=String(entry.unique_id||"");
-    const possible=[
+    if(!uid.startsWith(prefix))return null;
+    const key=uid.slice(prefix.length);
+    const known=[
       "voc_estimated","ventilation_level","silent_mode_switch",
       "ventilation_boost","configured_host","boost_remaining",
       "boost_active","nominal_airflow","minimum_airflow","fan_rpm",
       "fan_pwm","wifi_ip","wifi_ssid","wifi_mac","rssi","pressure",
       "humidity","temperature","airflow","voc","uptime",
     ];
-    return possible.find(key=>uid.endsWith("_"+key))||null;
+    return known.includes(key)?key:null;
   }
   async _loadRegistry(){
     if(!this._hass||this._loading)return;
@@ -213,12 +220,16 @@ class RensonManagedVentilationPanel extends HTMLElement{
         (d.identifiers||[]).some(id=>Array.isArray(id)&&id[0]==="renson_sense")
       ).sort((a,b)=>this._displayName(a).localeCompare(this._displayName(b)));
       this._devices=rensonDevices.map(device=>{
+        // The device registry identifier contains the actual HA config entry
+        // ID, which all Renson entity unique IDs share as their prefix.
+        const configEntryId=(device.identifiers||[])
+          .find(pair=>Array.isArray(pair)&&pair[0]==="renson_sense")?.[1];
         const reg=(allEntities||[]).filter(entity=>
           entity.platform==="renson_sense"&&entity.device_id===device.id
         );
         const entities={};
         for(const e of reg){
-          const key=this._registryKey(e);
+          const key=this._registryKey(e,configEntryId);
           if(key&&e.entity_id)entities[key]=e.entity_id;
         }
         return {key:device.id,name:this._displayName(device),entities,registry:device};
