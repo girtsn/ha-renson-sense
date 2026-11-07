@@ -3,6 +3,46 @@
 Local API integration for Renson Sense and Waves devices. No Renson cloud account
 is needed. Supports multiple device IPs / config entries with distinct names.
 
+## Proposed 0.2.1: Manual maintenance operations
+
+Two explicit actions can be invoked on a specific Waves fan entity using
+**Developer Tools → Actions**. They are not part of ordinary polling and will
+never run automatically after installation.
+
+**Calibrate**: request a new exhaust-system pressure-loss calibration (not
+VOC-sensor calibration):
+
+    action: renson_sense.calibrate
+    target:
+      entity_id: fan.2fl_bathroom_2fl_vent_waves_ventilation_boost
+    data:
+      confirmation: CALIBRATE
+
+**Restart**: restart one ventilator:
+
+    action: renson_sense.restart_device
+    target:
+      entity_id: fan.2fl_bathroom_2fl_vent_waves_ventilation_boost
+    data:
+      confirmation: RESTART
+
+These operations use `POST /v1/index` with form-encoded fields
+`calibrate=true` / `restart=true` as described in an independent
+Home Assistant community reverse-engineering report. **Not verified yet
+on the user's Waves firmware**; test in person, one device at a time.
+
+Before calibration, record existing nominal airflow and app-reported
+calibration pressure, prepare the ducts/front panel/room as instructed
+by Renson and observe the result using the app/device LED. A successful
+HTTP request means *the command was sent*, not that calibration passed.
+If the HTTP request times out, **do not retry blindly**: the operation
+may already be in progress.
+
+Nominal airflow writes, factory reset and Wi-Fi reconfiguration are
+**not exposed** because their parameter semantics and recovery risks
+need further verification. A calibration may affect measured extraction
+performance and should not be scheduled without supervision.
+
 ## What's new in 0.2.0
 
 - **Recorder and long-term statistics:** temperature, relative humidity, raw
@@ -88,7 +128,7 @@ An advanced action in Developer Tools → Actions:
 
 Controls use PUT /v1/decision/room/{room}/boost (fallback to
 /v1/decision/room/boost on HTTP 404) and PUT /v1/decision/silent.
-No unverified automatic calibration or Breeze writes are implemented.
+The additional manual calibration action is a one-shot, unverified maintenance command; no automatic calibration or Breeze writes are implemented.
 The calibrated installation pressure is not exposed by these known API
 responses; the live pressure sensor is a different measurement.
 

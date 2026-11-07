@@ -30,3 +30,41 @@ start_boost:
           step: 1
           unit_of_measurement: s
           mode: box
+
+calibrate:
+  name: Calibrate ventilation
+  description: >-
+    Request a new Waves ventilation calibration. This measures duct pressure
+    losses and may change airflow behaviour. Run only while physically present
+    and after preparing the installation as instructed by Renson. The HTTP
+    acknowledgement is not proof of successful calibration.
+  target:
+    entity:
+      domain: fan
+      integration: renson_sense
+  fields:
+    confirmation:
+      name: Confirmation
+      description: Type CALIBRATE exactly to allow this maintenance action.
+      required: true
+      example: CALIBRATE
+      selector:
+        text: {}
+
+restart_device:
+  name: Restart ventilator
+  description: >-
+    Restart the selected Waves ventilator. Temporarily interrupts extraction
+    control and monitoring; the device may disconnect before acknowledging.
+  target:
+    entity:
+      domain: fan
+      integration: renson_sense
+  fields:
+    confirmation:
+      name: Confirmation
+      description: Type RESTART exactly to allow this maintenance action.
+      required: true
+      example: RESTART
+      selector:
+        text: {}
