@@ -46,6 +46,11 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 cache_headers=False,
             ),
             StaticPathConfig(
+                f"/renson_sense/assets/{PANEL_VERSION}/chart-hover-tooltip.js",
+                str(www / "chart-hover-tooltip.js"),
+                cache_headers=False,
+            ),
+            StaticPathConfig(
                 f"/renson_sense/assets/{PANEL_VERSION}/renson-ventilation-date-range-picker.js",
                 str(www / "renson-ventilation-date-range-picker.js"),
                 cache_headers=False,
