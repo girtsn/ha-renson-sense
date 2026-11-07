@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Waves ventilation">
+ <defs>
+  <linearGradient id="sea" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#24d8e1"/><stop offset=".48" stop-color="#009fb6"/><stop offset="1" stop-color="#086b80"/></linearGradient>
+  <linearGradient id="fan" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#dffaff"/></linearGradient>
+ </defs>
+ <path d="M12 123C34 46 102 37 160 55c30 9 60 4 82-21-9 44-35 69-78 80-52 13-91 12-152 9Z" fill="url(#sea)"/>
+ <path d="M12 140c59 17 100 12 149-1 42-11 61-33 82-57-4 66-39 103-108 101-51-2-85-18-123-43Z" fill="#047f98"/>
+ <path d="M14 187c56-22 94-16 136-6 38 9 69 8 91-12-19 50-53 68-99 62-56-6-85-26-128-44Z" fill="#10ccd7"/>
+ <rect x="55" y="75" width="127" height="127" rx="21" fill="#e5ffff" stroke="#04576b" stroke-width="5"/>
+ <circle cx="118.5" cy="138.5" r="50" fill="#055e70"/>
+ <g fill="url(#fan)">
+  <path d="M119 129c-21-3-43-16-35-35 10-21 44-19 46 5 1 13-3 24-11 30Z"/>
+  <path d="M129 139c9-21 28-38 44-24 17 15 6 44-19 44-12 0-21-8-25-20Z"/>
+  <path d="M115 149c9 20 5 47-16 51-26 4-42-24-26-43 10-12 27-15 42-8Z"/>
+ </g>
+ <circle cx="119" cy="139" r="15" fill="#f5ffff" stroke="#0b7180" stroke-width="5"/>
+ <g fill="#075e71"><circle cx="69" cy="90" r="5"/><circle cx="168" cy="90" r="5"/><circle cx="69" cy="187" r="5"/><circle cx="168" cy="187" r="5"/></g>
+ <path d="M205 105c-18 22-15 32-2 32 15 0 15-13 2-32Z" fill="#9afaff"/>
+ <path d="M200 160c13-16 24-17 36-16-3 18-14 29-36 31-1-7-1-11 0-15Z" fill="#83f6b2"/>
+ <path d="M201 172c8-9 15-14 27-19" fill="none" stroke="#0c767c" stroke-width="3" stroke-linecap="round"/>
+</svg>
