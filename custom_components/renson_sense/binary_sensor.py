@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import RensonCoordinator
 from .const import CONF_NAME, DOMAIN
+from .device import renson_device_info
 from .helpers import nested_value
 
 
@@ -102,7 +103,7 @@ class RensonBinary(CoordinatorEntity[RensonCoordinator], BinarySensorEntity):
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_name = f"{entry.data.get(CONF_NAME, entry.title)} {description.name}"
-        self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}}
+        self._attr_device_info = renson_device_info(entry)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
