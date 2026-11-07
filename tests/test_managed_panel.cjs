@@ -30,7 +30,10 @@ async function main(){
   };
   const file=path.join(__dirname,"..","custom_components","renson_sense",
     "www","renson-ventilation-panel.js");
-  vm.runInNewContext(fs.readFileSync(file,"utf8"),context,{filename:file});
+  const panelSource=fs.readFileSync(file,"utf8").replace(
+    /^import \{attachRecorderChartTooltip\} from "\.\/chart-hover-tooltip\.js";\n/,"");
+  context.attachRecorderChartTooltip=()=>{};
+  vm.runInNewContext(panelSource,context,{filename:file});
   const manifest=JSON.parse(fs.readFileSync(path.join(__dirname,"..",
     "custom_components","renson_sense","manifest.json"),"utf8"));
   const Panel=classes.get("renson-managed-ventilation-v"+manifest.version.replace(/\./g,"-"));
