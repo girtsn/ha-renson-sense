@@ -1,3 +1,4 @@
+import {attachRecorderChartTooltip} from "./chart-hover-tooltip.js";
 /* Renson Sense / Waves integration-managed Ventilation panel.
  * All entities are discovered through Home Assistant's registries, so this
  * works with multiple devices, customized entity IDs, and normal HACS updates.
@@ -525,6 +526,10 @@ class RensonManagedVentilationPanel extends HTMLElement{
       }
     }
     surface.append(svg);
+    attachRecorderChartTooltip(surface,svg,
+      series.map(s=>({label:s.name,color:s.color,points:s.rows})),
+      {start,end,width:W,height:H,left:L,right:R,top:T,bottom:B,
+        yFor:Y,period:this._historyPeriod,unit:metric.unit});
     const legend=this._el("div",null,"legend");
     for(const s of series){
       const item=this._el("div",null,"legend-item");
