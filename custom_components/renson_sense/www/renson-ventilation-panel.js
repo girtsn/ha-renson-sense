@@ -99,6 +99,20 @@ class RensonManagedVentilationPanel extends HTMLElement{
   _displayName(device){
     return device.name_by_user||device.name||device.id;
   }
+  _addressLink(address){
+    // Local addresses only. Never pass an arbitrary state string directly to
+    // an href because those states are not trusted markup or URLs.
+    if(typeof address!=="string")return null;
+    const host=address.trim();
+    const valid=/^(?:[A-Za-z0-9.-]+(?::[0-9]{1,5})?|\[[0-9a-fA-F:]+\](?::[0-9]{1,5})?)$/;
+    if(["unknown","unavailable","none"].includes(host.toLowerCase())||!valid.test(host))return null;
+    const link=this._el("a",host,"device-address");
+    link.href="http://"+host+"/";
+    link.target="_blank";
+    link.rel="noopener noreferrer";
+    link.title="Open the device address in a new tab (a web interface may not be available)";
+    return link;
+  }
   _registryKey(entry){
     const uid=String(entry.unique_id||"");
     const possible=[
@@ -231,10 +245,9 @@ class RensonManagedVentilationPanel extends HTMLElement{
     const header=this._el("div",null,"device-head");
     const name=this._el("div");
     name.append(this._el("h2",dev.name),this._el("p",null,"subtle"));
-    const host=this._entity(dev,"configured_host");
     const note=name.querySelector("p");
-    note.textContent=host?(this._value(dev,"configured_host")||"Configured address unavailable"):
-      "Renson Sense / Waves";
+    note.dataset.ipLink=dev.key+"|configured_host";
+    note.textContent="Renson Sense / Waves";
     header.append(name);
     const boost=this._el("span",null,"status-pill");boost.dataset.live=dev.key+"|boost_status";
     header.append(boost);
@@ -302,7 +315,9 @@ class RensonManagedVentilationPanel extends HTMLElement{
       if(!this._entity(dev,key))continue;
       const row=this._el("div",null,"diag");
       row.append(this._el("span",label),this._el("strong"));
-      row.querySelector("strong").dataset.live=dev.key+"|"+key;
+      const output=row.querySelector("strong");
+      if(key==="wifi_ip")output.dataset.ipLink=dev.key+"|wifi_ip";
+      else output.dataset.live=dev.key+"|"+key;
       diag.append(row);
     }
     extra.append(diag);
@@ -536,10 +551,21 @@ class RensonManagedVentilationPanel extends HTMLElement{
         ].find(x=>x[0]===key);
         const unit=meta?.[2]||"";
         const raw=this._value(dev,key);
-        if(["wifi_ip"].includes(key))node.textContent=raw||"—";
-        else if(key==="voc_estimated")node.textContent=this._fmt(raw)+(raw==="unknown"?"":"");
-        else node.textContent=this._fmt(raw,unit);
+        node.textContent=this._fmt(raw,unit);
       }
+    }
+    // Both configured host (device header) and device-reported Wi-Fi IP
+    // (diagnostics) open directly in a separate browser tab.
+    for(const node of this.shadowRoot.querySelectorAll("[data-ip-link]")){
+      const [deviceId,key]=node.dataset.ipLink.split("|");
+      const dev=this._byKey.get(deviceId);
+      if(!dev)continue;
+      const raw=this._value(dev,key);
+      const link=this._addressLink(raw);
+      node.replaceChildren();
+      if(link)node.append(link);
+      else node.textContent=raw&&raw!=="unknown"&&raw!=="unavailable"?
+        String(raw):key==="configured_host"?"Configured address unavailable":"—";
     }
     for(const button of this.shadowRoot.querySelectorAll("[data-action-device]")){
       button.disabled=this._busy.has(button.dataset.actionDevice);
@@ -570,6 +596,8 @@ class RensonManagedVentilationPanel extends HTMLElement{
       ".device-card,.chart-card{border:1px solid var(--divider-color,#ddd);border-radius:14px;background:var(--card-background-color,var(--ha-card-background,#fff));padding:18px;min-width:0}",
       ".device-head{display:flex;justify-content:space-between;gap:12px;align-items:start}",
       ".device-head h2{margin-bottom:2px}.device-head .subtle{margin:3px 0 12px}",
+      ".device-address{color:var(--primary-color,#268bd2);text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}",
+      ".device-address:hover{text-decoration-thickness:2px}",
       ".status-pill{padding:5px 10px;border-radius:20px;background:var(--secondary-background-color,#eee);font-size:12px;white-space:nowrap}",
       ".status-pill.active{background:var(--primary-color,#268bd2);color:#fff}",
       ".readings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:15px}",
