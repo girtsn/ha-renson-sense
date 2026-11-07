@@ -22,3 +22,5 @@ jobs:
           python -m json.tool custom_components/renson_sense/strings.json > /dev/null
       - name: Validate managed panel JavaScript syntax
         run: node --check custom_components/renson_sense/www/renson-ventilation-panel.js
+      - name: Smoke test managed panel confirmations and history
+        run: node tests/test_managed_panel.cjs
