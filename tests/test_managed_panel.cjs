@@ -14,10 +14,11 @@ async function main(){
   const calls=[];
   class Element{
     attachShadow(){
-      return {
+      this.shadowRoot={
         querySelector:()=>null,
         querySelectorAll:()=>[],
       };
+      return this.shadowRoot;
     }
   }
   const ctx={
