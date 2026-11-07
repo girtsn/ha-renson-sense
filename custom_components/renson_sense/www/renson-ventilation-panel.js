@@ -4,7 +4,7 @@ import {attachRecorderChartTooltip} from "./chart-hover-tooltip.js";
  * works with multiple devices, customized entity IDs, and normal HACS updates.
  * Sensor values and history come exclusively from Home Assistant.
  */
-const RV_PANEL_VERSION="0.3.5";
+const RV_PANEL_VERSION="0.3.6";
 const RV_PICKER_NAME="renson-ventilation-date-range-v"+RV_PANEL_VERSION.replace(/\./g,"-");
 const RV_METRICS=[
   {key:"airflow",label:"Airflow",unit:"m³/h"},
