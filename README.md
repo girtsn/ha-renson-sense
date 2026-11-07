@@ -100,15 +100,16 @@ Restart Home Assistant after updating via HACS.
 ## 0.2.1: Manual maintenance operations
 
 Two explicit actions can be invoked on a specific Waves fan entity using
-**Developer Tools → Actions**. They are not part of ordinary polling and will
-never run automatically after installation.
+**Developer Tools → Actions**. Replace the illustrative
+`fan.example_waves_ventilation_boost` with your own device entity ID. These
+are not part of ordinary polling and never run automatically.
 
 **Calibrate**: request a new exhaust-system pressure-loss calibration (not
 VOC-sensor calibration):
 
     action: renson_sense.calibrate
     target:
-      entity_id: fan.2fl_bathroom_2fl_vent_waves_ventilation_boost
+      entity_id: fan.example_waves_ventilation_boost
     data:
       confirmation: CALIBRATE
 
@@ -116,14 +117,14 @@ VOC-sensor calibration):
 
     action: renson_sense.restart_device
     target:
-      entity_id: fan.2fl_bathroom_2fl_vent_waves_ventilation_boost
+      entity_id: fan.example_waves_ventilation_boost
     data:
       confirmation: RESTART
 
 These operations use `POST /v1/index` with form-encoded fields
 `calibrate=true` / `restart=true` as described in an independent
 Home Assistant community reverse-engineering report. **Not verified yet
-on the user's Waves firmware**; test in person, one device at a time.
+on every Waves firmware**; test in person, one device at a time.
 
 Before calibration, record existing nominal airflow and app-reported
 calibration pressure, prepare the ducts/front panel/room as instructed
@@ -198,11 +199,11 @@ for an ordinary boost, and fan.turn_off to cancel it. The fan entity's
 percentage reflects its *boost target*, not current measured extraction.
 For actual extraction, use the "Ventilation level" sensor.
 
-An advanced action in Developer Tools → Actions:
+An advanced action in Developer Tools → Actions (replace the example entity ID):
 
     action: renson_sense.start_boost
     target:
-      entity_id: fan.2fl_bathroom_ventilation_boost
+      entity_id: fan.example_waves_ventilation_boost
     data:
       level: 100
       duration: 900
