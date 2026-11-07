@@ -9,7 +9,7 @@ const assert=require("node:assert/strict");
 async function main(){
   const classes=new Map();
   let typed=null, confirmed=false, reloads=0;
-  let serverVersion="0.3.2";
+  let serverVersion="0.3.3";
   const session=new Map();
   const calls=[];
   class Element{
@@ -121,8 +121,63 @@ async function main(){
   assert.equal(ipNode.children[1].href,"http://192.168.2.60/");
   assert.equal(ipNode.children[1].target,"_blank");
 
-  assert.equal(panel._registryKey({unique_id:"abc_def_airflow"}),"airflow");
-  assert.equal(panel._registryKey({unique_id:"abc_def_voc_estimated"}),"voc_estimated");
+  assert.equal(panel._registryKey({unique_id:"entry_a_airflow"},"entry_a"),"airflow");
+  assert.equal(panel._registryKey({unique_id:"entry_a_voc_estimated"},"entry_a"),"voc_estimated");
+  assert.equal(panel._registryKey({unique_id:"entry_a_temperature"},"entry_a"),"temperature");
+  assert.equal(panel._registryKey({unique_id:"entry_a_breeze_temperature"},"entry_a"),null,
+    "Breeze threshold is not an indoor temperature reading");
+  assert.equal(panel._registryKey({unique_id:"entry_a_humidity_static_min"},"entry_a"),null);
+  assert.equal(panel._registryKey({unique_id:"entry_other_temperature"},"entry_a"),null,
+    "An entity belonging to a different device must not match");
+  assert.equal(panel._registryKey({unique_id:"entry_a_temperature"}),null,
+    "Never fall back to broad suffix matching when entry identifier is missing");
+
+  // Reproduce the exact 30°C vs 25.3°C regression in the actual device/entity
+  // registry discovery, including a second ventilator and both entry orders.
+  const dataDevices=[
+    {id:"d1",name:"Bathroom 1",identifiers:[["renson_sense","entry_a"]]},
+    {id:"d2",name:"Bathroom 2",identifiers:[["renson_sense","entry_b"]]},
+  ];
+  const dataEntities=[
+    {platform:"renson_sense",device_id:"d1",unique_id:"entry_a_temperature",entity_id:"sensor.one_temp"},
+    {platform:"renson_sense",device_id:"d1",unique_id:"entry_a_breeze_temperature",entity_id:"sensor.one_breeze_threshold"},
+    {platform:"renson_sense",device_id:"d2",unique_id:"entry_b_breeze_temperature",entity_id:"sensor.two_breeze_threshold"},
+    {platform:"renson_sense",device_id:"d2",unique_id:"entry_b_temperature",entity_id:"sensor.two_temp"},
+  ];
+  const mappingPanel=new Panel();
+  mappingPanel._hass={
+    states:{
+      "sensor.one_temp":{state:"25.3",attributes:{state_class:"measurement"}},
+      "sensor.one_breeze_threshold":{state:"30",attributes:{state_class:"measurement"}},
+      "sensor.two_temp":{state:"23.4",attributes:{state_class:"measurement"}},
+      "sensor.two_breeze_threshold":{state:"30",attributes:{state_class:"measurement"}},
+    },
+    callWS:async request=>{
+      if(request.type==="config/device_registry/list")return dataDevices;
+      if(request.type==="config/entity_registry/list")return dataEntities;
+      if(request.type==="recorder/statistics_during_period"){
+        assert.deepEqual(Array.from(request.statistic_ids),["sensor.one_temp","sensor.two_temp"]);
+        return Object.fromEntries(request.statistic_ids.map(id=>[
+          id,[{start:Date.now()-60000,mean:Number(mappingPanel._hass.states[id].state)}],
+        ]));
+      }
+      throw Error("Unexpected WebSocket call "+request.type);
+    },
+  };
+  mappingPanel._render=()=>{};
+  mappingPanel._loadChart=()=>{};
+  await mappingPanel._loadRegistry();
+  delete mappingPanel._loadChart;
+  assert.equal(mappingPanel._devices.length,2);
+  assert.equal(mappingPanel._devices[0].entities.temperature,"sensor.one_temp");
+  assert.equal(mappingPanel._devices[1].entities.temperature,"sensor.two_temp");
+  assert.equal(mappingPanel._value(mappingPanel._devices[0],"temperature"),"25.3");
+  assert.equal(mappingPanel._value(mappingPanel._devices[1],"temperature"),"23.4");
+  assert.equal(mappingPanel._statisticId(mappingPanel._devices[0],"temperature"),"sensor.one_temp");
+  mappingPanel._charts.short.metric="temperature";
+  await mappingPanel._loadChart("short");
+  assert.equal(mappingPanel._charts.short.series[0].rows[0].y,25.3);
+  assert.equal(mappingPanel._charts.short.series[1].rows[0].y,23.4);
 
   typed=null;
   panel._maintenance(device,"calibrate");
@@ -173,13 +228,13 @@ async function main(){
   panel.isConnected=true;
   await panel._checkInstalledVersion();
   assert.equal(reloads,0,"Matching frontend version should not reload");
-  serverVersion="0.3.3";
+  serverVersion="0.3.4";
   await panel._checkInstalledVersion();
   assert.equal(reloads,1,"New release must trigger one full reload");
   await panel._checkInstalledVersion();
   assert.equal(reloads,1,"Stale browser cache must not cause a reload loop");
   panel._busy.add(device.key);
-  serverVersion="0.3.4";
+  serverVersion="0.3.5";
   await panel._checkInstalledVersion();
   assert.equal(reloads,1,"An in-progress device command must prevent reload");
   panel._busy.clear();
