@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+import json
 import logging
 from typing import Any
 
@@ -23,7 +24,10 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["sensor", "binary_sensor", "fan", "switch"]
 PANEL_PATH = "renson-ventilation"
-PANEL_VERSION = "0.3.0"
+# Read the installed manifest so every future HACS version refreshes the JS.
+PANEL_VERSION = json.loads(
+    (Path(__file__).parent / "manifest.json").read_text(encoding="utf-8")
+)["version"]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:

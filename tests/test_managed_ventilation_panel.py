@@ -15,6 +15,7 @@ class TestRensonPanel(unittest.TestCase):
         self.assertIn('frontend.async_remove_panel', init)
         self.assertIn('await _async_register_ventilation_panel(hass)', init)
         self.assertIn("managed-panel.js?v=", init)
+        self.assertIn('Path(__file__).parent / "manifest.json"', init)
         manifest = (ROOT / "manifest.json").read_text()
         self.assertIn('"frontend"', manifest)
         self.assertIn('"http"', manifest)
