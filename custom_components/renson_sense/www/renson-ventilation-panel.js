@@ -3,6 +3,8 @@
  * works with multiple devices, customized entity IDs, and normal HACS updates.
  * Sensor values and history come exclusively from Home Assistant.
  */
+const RV_PANEL_VERSION="0.3.2";
+const RV_UPDATE_CHECK_MS=2*60*1000;
 const RV_METRICS=[
   {key:"airflow",label:"Airflow",unit:"m³/h"},
   {key:"ventilation_level",label:"Ventilation level",unit:"%"},
@@ -46,6 +48,8 @@ class RensonManagedVentilationPanel extends HTMLElement{
     this._prefs=new Map();
     this._notice="";
     this._registryError="";
+    this._versionTimer=null;
+    this._versionChecking=false;
     this._charts={
       short:{metric:"airflow",period:"24h",selected:"all",loading:false,series:[],error:"",request:0,lastLoad:0},
       long:{metric:"humidity",period:"90d",selected:"all",loading:false,series:[],error:"",request:0,lastLoad:0},
@@ -67,6 +71,58 @@ class RensonManagedVentilationPanel extends HTMLElement{
   set route(value){this._route=value;}
   connectedCallback(){
     if(this._hass&&!this._registered&&!this._loading)this._loadRegistry();
+    if(this._versionTimer===null){
+      // A tab can remain open across HACS upgrades. Poll a no-cache manifest
+      // and reload once when the installed integration version changes.
+      this._checkInstalledVersion();
+      this._versionTimer=window.setInterval(
+        ()=>this._checkInstalledVersion(),RV_UPDATE_CHECK_MS
+      );
+    }
+  }
+  disconnectedCallback(){
+    if(this._versionTimer!==null){
+      window.clearInterval(this._versionTimer);
+      this._versionTimer=null;
+    }
+  }
+  async _checkInstalledVersion(){
+    if(this._versionChecking||!this.isConnected)return;
+    this._versionChecking=true;
+    try{
+      const response=await fetch(
+        "/renson_sense/manifest.json?check="+Date.now(),{cache:"no-store"}
+      );
+      if(!response.ok)return;
+      const info=await response.json();
+      const version=info?.version;
+      if(typeof version!=="string"||!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version)||
+         version===RV_PANEL_VERSION)return;
+      if(this._busy.size){
+        this._noticeText("New Renson dashboard "+version+
+          " available. It will reload after the current operation.");
+        return;
+      }
+      // Prevent an infinite loop if a proxy or browser service worker keeps
+      // serving the previous JS even after a full reload.
+      const key="renson-panel-reload-attempt-"+version;
+      try{
+        if(window.sessionStorage.getItem(key)!=="1"){
+          window.sessionStorage.setItem(key,"1");
+          window.location.reload();
+          return;
+        }
+      }catch(_err){
+        // Browser storage may be restricted. The user can still hard-refresh.
+      }
+      this._noticeText("New Renson dashboard "+version+
+        " is installed, but this tab still has "+RV_PANEL_VERSION+
+        ". Close and reopen it, or press Ctrl+Shift+R to bypass browser cache.");
+    }catch(_err){
+      // Home Assistant may be restarting during an update. Retry later.
+    }finally{
+      this._versionChecking=false;
+    }
   }
   _el(tag,text,css){
     const el=document.createElement(tag);
@@ -99,13 +155,34 @@ class RensonManagedVentilationPanel extends HTMLElement{
   _displayName(device){
     return device.name_by_user||device.name||device.id;
   }
-  _addressLink(address){
-    // Local addresses only. Never pass an arbitrary state string directly to
-    // an href because those states are not trusted markup or URLs.
+  _normalizeHost(address){
+    // A host/IP from either the state machine or the device registry is data,
+    // never trusted HTML. Only HTTP host[:port] input is accepted.
     if(typeof address!=="string")return null;
     const host=address.trim();
     const valid=/^(?:[A-Za-z0-9.-]+(?::[0-9]{1,5})?|\[[0-9a-fA-F:]+\](?::[0-9]{1,5})?)$/;
-    if(["unknown","unavailable","none"].includes(host.toLowerCase())||!valid.test(host))return null;
+    if(["unknown","unavailable","none"].includes(host.toLowerCase())||
+       !valid.test(host))return null;
+    return host;
+  }
+  _configuredHost(dev){
+    // The configured-host diagnostic entity might be disabled or not yet
+    // registered. DeviceInfo.configuration_url is populated directly from
+    // the config entry, so use it as the independent read-only fallback.
+    const sensorHost=this._normalizeHost(this._value(dev,"configured_host"));
+    if(sensorHost)return sensorHost;
+    const link=dev.registry?.configuration_url;
+    if(typeof link!=="string")return null;
+    try{
+      const url=new URL(link);
+      if(!["http:","https:"].includes(url.protocol)||url.username||url.password)
+        return null;
+      return this._normalizeHost(url.host);
+    }catch(_err){return null;}
+  }
+  _addressLink(address){
+    const host=this._normalizeHost(address);
+    if(!host)return null;
     const link=this._el("a",host,"device-address");
     link.href="http://"+host+"/";
     link.target="_blank";
@@ -560,12 +637,16 @@ class RensonManagedVentilationPanel extends HTMLElement{
       const [deviceId,key]=node.dataset.ipLink.split("|");
       const dev=this._byKey.get(deviceId);
       if(!dev)continue;
-      const raw=this._value(dev,key);
+      const raw=key==="configured_host"
+        ?this._configuredHost(dev):this._value(dev,key);
       const link=this._addressLink(raw);
       node.replaceChildren();
+      if(key==="configured_host"){
+        node.append(this._el("span","Configured IP: "));
+      }
       if(link)node.append(link);
-      else node.textContent=raw&&raw!=="unknown"&&raw!=="unavailable"?
-        String(raw):key==="configured_host"?"Configured address unavailable":"—";
+      else node.append(this._el("span",
+        key==="configured_host"?"Address not available":"—"));
     }
     for(const button of this.shadowRoot.querySelectorAll("[data-action-device]")){
       button.disabled=this._busy.has(button.dataset.actionDevice);
@@ -641,9 +722,9 @@ class RensonManagedVentilationPanel extends HTMLElement{
       charts.append(this._chartSection("short"),this._chartSection("long"));
       shell.append(charts);
       shell.append(this._el("p",
-        "This panel is maintained by the Renson integration. It does not alter other dashboards or automations. "+
-        "Historical graphs use Home Assistant Recorder statistics; values from before statistics collection are not reconstructed. "+
-        "Estimated VOC is experimental and not a safety measurement.",
+        "Frontend v"+RV_PANEL_VERSION+" · Managed by the Renson integration. "+
+        "Existing dashboards and automations are unchanged. Trends use Recorder statistics. "+
+        "Estimated VOC is experimental, not a safety measurement.",
         "footer"));
     }
     root.append(shell);

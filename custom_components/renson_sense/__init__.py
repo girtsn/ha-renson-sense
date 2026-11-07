@@ -36,8 +36,13 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                "/renson_sense/managed-panel.js",
+                f"/renson_sense/assets/{PANEL_VERSION}/managed-panel.js",
                 str(www / "renson-ventilation-panel.js"),
+                cache_headers=False,
+            ),
+            StaticPathConfig(
+                "/renson_sense/manifest.json",
+                str(Path(__file__).parent / "manifest.json"),
                 cache_headers=False,
             )
         ]
@@ -57,7 +62,7 @@ async def _async_register_ventilation_panel(hass: HomeAssistant) -> None:
             sidebar_title="Renson Ventilation",
             sidebar_icon="mdi:fan",
             module_url=(
-                f"/renson_sense/managed-panel.js?v={PANEL_VERSION}"
+                f"/renson_sense/assets/{PANEL_VERSION}/managed-panel.js?v={PANEL_VERSION}"
             ),
             require_admin=False,
         )

@@ -3,6 +3,28 @@
 Local API integration for Renson Sense and Waves devices. No Renson cloud account
 is needed. Supports multiple device IPs / config entries with distinct names.
 
+## 0.3.2: Reliable configured address and frontend cache refresh
+
+The dashboard now uses the **configured host diagnostic sensor** when present,
+but falls back to the Home Assistant **device registry configuration URL** when
+that sensor is missing, disabled or unavailable. The configured address is shown
+and clickable at the top of each device card; the **reported Wi-Fi IP** remains
+separate in Diagnostics. The fallback does not substitute the reported address
+for the configured one, even when the addresses happen to be the same.
+
+Dashboard JavaScript now uses an integration-versioned asset path (not only a
+query parameter), and the panel checks a no-cache copy of the installed
+manifest every two minutes. If a newer version is detected in an already-open
+tab, it attempts one reload while no control action is in progress. A reload
+loop is prevented, and the page displays a hard-refresh hint if the old
+JavaScript persists. The footer shows the active frontend version.
+
+Because the previous (0.3.1) JavaScript did not have the version monitor, one
+final hard refresh may be needed on initial update to 0.3.2. Subsequent
+updates should be recognized automatically when Home Assistant is running,
+although external browser/service-worker/reverse-proxy caching cannot be
+eliminated completely.
+
 ## 0.3.1: Clickable device addresses
 
 The configured IP / hostname at the top of each device card is a clickable
