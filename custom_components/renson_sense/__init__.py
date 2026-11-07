@@ -36,8 +36,18 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
+                "/renson_sense/panel-loader.js",
+                str(www / "renson-ventilation-loader.js"),
+                cache_headers=False,
+            ),
+            StaticPathConfig(
                 f"/renson_sense/assets/{PANEL_VERSION}/managed-panel.js",
                 str(www / "renson-ventilation-panel.js"),
+                cache_headers=False,
+            ),
+            StaticPathConfig(
+                f"/renson_sense/assets/{PANEL_VERSION}/renson-ventilation-date-range-picker.js",
+                str(www / "renson-ventilation-date-range-picker.js"),
                 cache_headers=False,
             ),
             StaticPathConfig(
@@ -58,12 +68,11 @@ async def _async_register_ventilation_panel(hass: HomeAssistant) -> None:
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path=PANEL_PATH,
-            webcomponent_name="renson-managed-ventilation-panel",
+            webcomponent_name="renson-ventilation-loader-panel",
             sidebar_title="Renson Ventilation",
             sidebar_icon="mdi:fan",
-            module_url=(
-                f"/renson_sense/assets/{PANEL_VERSION}/managed-panel.js?v={PANEL_VERSION}"
-            ),
+            # A stable loader dynamically imports the installed versioned module.
+            module_url="/renson_sense/panel-loader.js",
             require_admin=False,
         )
     except (ValueError, RuntimeError):

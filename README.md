@@ -3,6 +3,47 @@
 Local API integration for Renson Sense and Waves devices. No Renson cloud account
 is needed. Supports multiple device IPs / config entries with distinct names.
 
+## 0.3.4: Shared TadoX-style period selector, metric graphs, and reliable frontend loading
+
+The integration-managed **Renson Ventilation** sidebar now presents a shared
+calendar date-range picker adapted from the user's **tado X / Tylo Sauna**
+integrations. It is shown once, above the history charts, with presets for
+today, yesterday, current week/month/quarter/year, last 7/30/365 days, last 12
+months and last 3 years, date shifting and custom calendar selection.
+
+- There is now **one graph per metric**: airflow (m³/h), ventilation level (%),
+  temperature (°C), humidity (%), estimated VOC index, raw VOC, fan RPM, and
+  live pressure (Pa), comparing configured ventilators on the same unit scale.
+- The **same selected date range** governs all eight graphs. Short-term
+  recording uses 5-minute/hourly data; longer periods use daily, weekly or
+  monthly Recorder statistics so all graphs can show up to three years without
+  querying high-resolution raw history.
+- All metrics are fetched in **one batched Recorder WebSocket query**, with
+  a 15-minute refresh safeguard and independently filtered device views.
+  Missing historical statistics remain missing; the integration does not
+  synthesize historical data.
+- Controls, typed maintenance confirmations, diagnostics and clickable
+  configured/reported IP links are retained, with no entity ID changes.
+
+### Frontend module loading / browser cache improvements
+
+The sidebar is now a **stable lightweight loader** which checks the installed
+integration manifest using no-cache requests, imports the correctly versioned
+dashboard module and **replaces the child component** instead of relying on
+a browser page reload. The current module and date picker use unique versioned
+asset paths; missing dependencies have a retry control. The loader checks on
+initial load, when the tab becomes visible or focused and every 60 seconds.
+If a control action is active or Home Assistant is still restarting, the
+previous dashboard remains active until the update can complete. Failed module
+imports use a new retry URL to avoid reusing a cached error.
+
+**One-time transition:** A browser tab still running 0.3.3 does not yet have
+the loader. After installing 0.3.4 through HACS and restarting Home Assistant,
+close and reopen the tab. A final Ctrl+F5 may be required once if the old
+Home Assistant frontend has cached the previous panel registration. The loader
+should handle future updates without hard refreshes, provided an external proxy
+or browser service worker does not override these no-cache requests.
+
 ## 0.3.3: Fix actual temperature vs Breeze setpoint mix-up
 
 The dashboard previously matched entity IDs by their suffix. Both the real
