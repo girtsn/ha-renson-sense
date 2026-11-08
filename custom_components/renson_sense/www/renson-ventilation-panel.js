@@ -54,6 +54,7 @@ class RensonManagedVentilationPanel extends HTMLElement{
   }
   set hass(hass){
     this._hass=hass;
+    if(this._picker?.isConnected)this._picker.hass=hass;
     if(!this._assetsReady){
       this._ensureAssets();return;
     }
@@ -692,6 +693,8 @@ class RensonManagedVentilationPanel extends HTMLElement{
       const actions=this._el("div",null,"history-tools");
       const picker=this._el(RV_PICKER_NAME);
       picker.range=this._range;
+      picker.hass=this._hass;
+      this._picker=picker;
       picker.addEventListener("date-range-changed",event=>{
         this._range=event.detail;this._loadHistory();
       });
