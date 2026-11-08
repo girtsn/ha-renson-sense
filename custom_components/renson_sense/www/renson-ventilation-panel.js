@@ -4,7 +4,7 @@ import {attachRecorderChartTooltip} from "./chart-hover-tooltip.js";
  * works with multiple devices, customized entity IDs, and normal HACS updates.
  * Sensor values and history come exclusively from Home Assistant.
  */
-const RV_PANEL_VERSION="0.3.6";
+const RV_PANEL_VERSION="0.3.7";
 const RV_PICKER_NAME="renson-ventilation-date-range-v"+RV_PANEL_VERSION.replace(/\./g,"-");
 const RV_METRICS=[
   {key:"airflow",label:"Airflow",unit:"m³/h"},
@@ -54,6 +54,7 @@ class RensonManagedVentilationPanel extends HTMLElement{
   }
   set hass(hass){
     this._hass=hass;
+    if(this._picker?.isConnected)this._picker.hass=hass;
     if(!this._assetsReady){
       this._ensureAssets();return;
     }
@@ -692,6 +693,8 @@ class RensonManagedVentilationPanel extends HTMLElement{
       const actions=this._el("div",null,"history-tools");
       const picker=this._el(RV_PICKER_NAME);
       picker.range=this._range;
+      picker.hass=this._hass;
+      this._picker=picker;
       picker.addEventListener("date-range-changed",event=>{
         this._range=event.detail;this._loadHistory();
       });
