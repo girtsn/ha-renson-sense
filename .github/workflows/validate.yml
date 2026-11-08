@@ -25,6 +25,8 @@ jobs:
           node --check custom_components/renson_sense/www/renson-ventilation-panel.js
           node --check custom_components/renson_sense/www/renson-ventilation-loader.js
           node --check custom_components/renson_sense/www/renson-ventilation-date-range-picker.js
+      - name: Test user-localized week selection
+        run: node tests/test_date_range_locale.cjs
       - name: Test interactive Recorder tooltip
         run: node tests/test_chart_hover_tooltip.cjs custom_components/renson_sense/www/chart-hover-tooltip.js
       - name: Smoke test managed panel confirmations and history
