@@ -21,6 +21,12 @@ class TestHelpers(unittest.TestCase):
         self.assertIsNone(helper.typed_node(data, "missing"))
         self.assertIsNone(helper.nested_value(data, "not_there"))
 
+    def test_typed_node_accepts_alternative_types(self):
+        data = {"1": {"type": "light", "parameter": {"lux": {"value": 96}}}}
+        self.assertEqual(helper.nested_value(helper.typed_node(data, ("lux", "light")),
+                                             "parameter", "lux", "value"), 96)
+        self.assertIsNone(helper.typed_node(data, "lux"))
+
     def test_ventilation_percentage(self):
         self.assertEqual(helper.ventilation_percentage(4, 38), 10.5)
         self.assertEqual(helper.ventilation_percentage(5, 50), 10.0)
