@@ -1,8 +1,12 @@
-/* Shared Energy-style calendar picker. Dates are HA-local calendar days,
- * independent of the viewing browser's timezone (including DST transitions).
- * Civil calendar arithmetic is performed on UTC-midnight surrogate Date objects.
+/* Shared Energy-style calendar picker. Honor HA user-profile time zone:
+ * "local" = this viewing device; "server" = HA configured location.
+ * UTC-midnight surrogate civil dates preserve correct 23/25h DST boundaries.
  */
-const rvZone=hass=>hass?.config?.time_zone||"UTC";
+const rvZone=hass=>{
+  const server=hass?.config?.time_zone||"UTC";
+  if(hass?.locale?.time_zone!=="local")return server;
+  return Intl.DateTimeFormat().resolvedOptions().timeZone||server;
+};
 const rvCivil=(instant,zone)=>{
   const values=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{
     timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"
@@ -78,8 +82,20 @@ class RensonVentilationDateRangePicker extends HTMLElement {
   set hass(value){
     const previous=this._hass;
     this._hass=value;
-    if((!previous||rvZone(previous)!==rvZone(value)||
-      rvFirstWeekday(previous)!==rvFirstWeekday(value))&&this._range?.preset==="week"){
+    const zoneChanged=previous&&rvZone(previous)!==rvZone(value);
+    if(zoneChanged&&this._range?.preset!=="last24"){
+      // Preserve the chosen *calendar dates* when a user switches between
+      // local/server time. Recompute the UTC instants for the new zone.
+      const start=rvCivil(new Date(this._range.start),rvZone(previous));
+      const end=rvCivil(new Date(this._range.end),rvZone(previous));
+      this._range={...this._range,
+        start:rvToUtc(start,value),end:rvToUtc(end,value)};
+      this._month=rvToday(value);
+      this.dispatchEvent(new CustomEvent("date-range-changed",{
+        detail:this._range,bubbles:true,composed:true
+      }));
+    }else if((!previous||rvFirstWeekday(previous)!==rvFirstWeekday(value))
+      &&this._range?.preset==="week"){
       this._range=rvPresetRange("week",new Date(),value);
       this._month=rvToday(value);
       this.dispatchEvent(new CustomEvent("date-range-changed",{
@@ -276,4 +292,4 @@ const RV_PICKER_TAG="renson-ventilation-date-range-v"+RV_PICKER_VERSION.replace(
 if(!customElements.get(RV_PICKER_TAG))
   customElements.define(RV_PICKER_TAG,RensonVentilationDateRangePicker);
 
-export { rvPresetRange };
+export { rvPresetRange, rvZone };

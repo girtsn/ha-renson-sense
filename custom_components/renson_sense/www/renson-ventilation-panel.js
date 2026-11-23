@@ -4,7 +4,7 @@ import {attachRecorderChartTooltip} from "./chart-hover-tooltip.js";
  * works with multiple devices, customized entity IDs, and normal HACS updates.
  * Sensor values and history come exclusively from Home Assistant.
  */
-const RV_PANEL_VERSION="0.3.8";
+const RV_PANEL_VERSION="0.3.9";
 const RV_PICKER_NAME="renson-ventilation-date-range-v"+RV_PANEL_VERSION.replace(/\./g,"-");
 const RV_METRICS=[
   {key:"airflow",label:"Airflow",unit:"m³/h"},
@@ -25,6 +25,7 @@ const rvRecorderPeriod=range=>{
   return "month";
 };
 let rvPresetRange=null;
+let rvZone=h=>h?.config?.time_zone||"UTC";
 const RV_COLORS=["#377dd2","#e18a32","#1a997c","#9b6ec8","#b9505b"];
 const RV_LIVE=[
   ["airflow","Airflow","m³/h"],["ventilation_level","Ventilation","%"],
@@ -81,8 +82,9 @@ class RensonManagedVentilationPanel extends HTMLElement{
       "./renson-ventilation-date-range-picker.js?v="+RV_PANEL_VERSION+retry
     ).then(module=>{
       rvPresetRange=module.rvPresetRange;
+      rvZone=module.rvZone;
       if(typeof rvPresetRange!=="function")throw Error("Date selector export unavailable");
-      this._range??=rvPresetRange("last7");
+      this._range??=rvPresetRange("last7",new Date(),this._hass);
       this._assetsReady=true;
       if(this._hass&&!this._registered&&!this._loading)this._loadRegistry();
     }).catch(err=>{
@@ -449,9 +451,11 @@ class RensonManagedVentilationPanel extends HTMLElement{
   _date(ts){
     const d=new Date(ts),range=this._range;
     const days=(Date.parse(range.end)-Date.parse(range.start))/86400000;
-    return days<=3?d.toLocaleString(undefined,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):
-      days>550?d.toLocaleDateString(undefined,{month:"short",year:"numeric"}):
-      d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"2-digit"});
+    const zone=rvZone(this._hass);
+    const language=this._hass?.locale?.language||undefined;
+    return days<=3?d.toLocaleString(language,{timeZone:zone,day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):
+      days>550?d.toLocaleDateString(language,{timeZone:zone,month:"short",year:"numeric"}):
+      d.toLocaleDateString(language,{timeZone:zone,month:"short",day:"numeric",year:"2-digit"});
   }
   _drawAllCharts(){
     for(const metric of RV_METRICS)this._drawChart(metric);
