@@ -25,6 +25,7 @@ const rvRecorderPeriod=range=>{
   return "month";
 };
 let rvPresetRange=null;
+let rvZone=h=>h?.config?.time_zone||"UTC";
 const RV_COLORS=["#377dd2","#e18a32","#1a997c","#9b6ec8","#b9505b"];
 const RV_LIVE=[
   ["airflow","Airflow","m³/h"],["ventilation_level","Ventilation","%"],
@@ -81,6 +82,7 @@ class RensonManagedVentilationPanel extends HTMLElement{
       "./renson-ventilation-date-range-picker.js?v="+RV_PANEL_VERSION+retry
     ).then(module=>{
       rvPresetRange=module.rvPresetRange;
+      rvZone=module.rvZone;
       if(typeof rvPresetRange!=="function")throw Error("Date selector export unavailable");
       this._range??=rvPresetRange("last7",new Date(),this._hass);
       this._assetsReady=true;
@@ -449,9 +451,11 @@ class RensonManagedVentilationPanel extends HTMLElement{
   _date(ts){
     const d=new Date(ts),range=this._range;
     const days=(Date.parse(range.end)-Date.parse(range.start))/86400000;
-    return days<=3?d.toLocaleString(undefined,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):
-      days>550?d.toLocaleDateString(undefined,{month:"short",year:"numeric"}):
-      d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"2-digit"});
+    const zone=rvZone(this._hass);
+    const language=this._hass?.locale?.language||undefined;
+    return days<=3?d.toLocaleString(language,{timeZone:zone,day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):
+      days>550?d.toLocaleDateString(language,{timeZone:zone,month:"short",year:"numeric"}):
+      d.toLocaleDateString(language,{timeZone:zone,month:"short",day:"numeric",year:"2-digit"});
   }
   _drawAllCharts(){
     for(const metric of RV_METRICS)this._drawChart(metric);
