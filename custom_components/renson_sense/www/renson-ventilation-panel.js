@@ -82,7 +82,7 @@ class RensonManagedVentilationPanel extends HTMLElement{
     ).then(module=>{
       rvPresetRange=module.rvPresetRange;
       if(typeof rvPresetRange!=="function")throw Error("Date selector export unavailable");
-      this._range??=rvPresetRange("last7");
+      this._range??=rvPresetRange("last7",new Date(),this._hass);
       this._assetsReady=true;
       if(this._hass&&!this._registered&&!this._loading)this._loadRegistry();
     }).catch(err=>{
