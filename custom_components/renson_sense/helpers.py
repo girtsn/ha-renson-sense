@@ -19,12 +19,13 @@ def nested_value(data: Any, *keys: str) -> Any:
     return data
 
 
-def typed_node(nodes: Any, node_type: str) -> dict[str, Any] | None:
+def typed_node(nodes: Any, node_type: str | tuple[str, ...]) -> dict[str, Any] | None:
     """Find a sensor/actuator by its declared type, never by numeric index."""
     if not isinstance(nodes, dict):
         return None
+    types = (node_type,) if isinstance(node_type, str) else node_type
     for node in nodes.values():
-        if isinstance(node, dict) and node.get("type") == node_type:
+        if isinstance(node, dict) and node.get("type") in types:
             return node
     return None
 
