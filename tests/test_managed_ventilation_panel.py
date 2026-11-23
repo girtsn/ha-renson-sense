@@ -45,7 +45,7 @@ class TestRensonPanel(unittest.TestCase):
         for key in ['"last7"', '"last30"', '"last365"', '"last3years"']:
             self.assertIn(key, picker)
         self.assertIn('date-range-changed', panel)
-        self.assertIn('rvPresetRange("last7")', panel)
+        self.assertIn('rvPresetRange("last7",new Date(),this._hass)', panel)
         self.assertIn("RV_PICKER_NAME", panel)
         self.assertIn("RV_PICKER_VERSION", picker)
         self.assertIn("RV_PICKER_TAG", picker)
